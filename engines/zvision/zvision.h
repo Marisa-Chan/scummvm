@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -24,7 +24,6 @@
 #ifndef ZVISION_ZVISION_H
 #define ZVISION_ZVISION_H
 
-#include "zvision/detection.h"
 #include "zvision/core/clock.h"
 #include "zvision/file/search_manager.h"
 
@@ -51,7 +50,6 @@ class VideoDecoder;
  * - Zork: Grand Inquisitor
  *
  */
-
 namespace ZVision {
 
 struct ZVisionGameDescription;
@@ -74,18 +72,28 @@ enum {
 	HIRES_WINDOW_WIDTH = 800,
 	HIRES_WINDOW_HEIGHT = 600,
 
-	// Zork nemesis working window sizes
-	ZNM_WORKING_WINDOW_WIDTH  = 512,
+	// Zork Nemesis working window sizes
+	ZNM_WORKING_WINDOW_WIDTH = 512,
 	ZNM_WORKING_WINDOW_HEIGHT = 320,
 
 	// ZGI working window sizes
-	ZGI_WORKING_WINDOW_WIDTH  = 640,
+	ZGI_WORKING_WINDOW_WIDTH = 640,
 	ZGI_WORKING_WINDOW_HEIGHT = 344,
 
 	ROTATION_SCREEN_EDGE_OFFSET = 60,
 	MAX_ROTATION_SPEED = 400, // Pixels per second
 
 	KEYBUF_SIZE = 20
+};
+
+enum ZVisionGameId {
+	GID_NONE = 0,
+	GID_NEMESIS = 1,
+	GID_GRANDINQUISITOR = 2
+};
+
+enum ZVisionFeatures {
+	GF_DVD = (1 << 0) // ZGI DVD version
 };
 
 class ZVision : public Engine {
@@ -116,12 +124,12 @@ private:
 	ScriptManager *_scriptManager;
 	RenderManager *_renderManager;
 	CursorManager *_cursorManager;
-	SaveManager *_saveManager;
 	StringManager *_stringManager;
-	MenuHandler *_menu;
 	SearchManager *_searchManager;
 	TextRenderer *_textRenderer;
 	MidiManager *_midiManager;
+	SaveManager *_saveManager;
+	MenuHandler *_menu;
 
 	// Clock
 	Clock _clock;
@@ -141,11 +149,14 @@ private:
 	bool _videoIsPlaying;
 
 	uint8 _cheatBuffer[KEYBUF_SIZE];
+
 public:
-	uint32 getFeatures() const;
-	Common::Language getLanguage() const;
 	Common::Error run();
 	void pauseEngineIntern(bool pause);
+
+	ZVisionGameId getGameId() const;
+	Common::Language getLanguage() const;
+	uint32 getFeatures() const;
 
 	ScriptManager *getScriptManager() const {
 		return _scriptManager;
@@ -174,11 +185,9 @@ public:
 	MenuHandler *getMenuHandler() const {
 		return _menu;
 	}
+
 	Common::RandomSource *getRandomSource() const {
 		return _rnd;
-	}
-	ZVisionGameId getGameId() const {
-		return _gameDescription->gameId;
 	}
 	int16 getKeyboardVelocity() const {
 		return _keyboardVelocity;
@@ -236,6 +245,7 @@ public:
 	bool canSaveGameStateCurrently();
 	Common::Error loadGameState(int slot);
 	Common::Error saveGameState(int slot, const Common::String &desc);
+
 private:
 	void initialize();
 	void initFonts();
@@ -254,6 +264,8 @@ private:
 	void pushKeyToCheatBuf(uint8 key);
 	bool checkCode(const char *code);
 	uint8 getBufferedKey(uint8 pos);
+
+	double getVobAmplification(Common::String fileName) const;
 };
 
 } // End of namespace ZVision

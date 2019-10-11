@@ -77,7 +77,7 @@ void Player_V2::setMusicVolume (int vol) {
 		vol = 255;
 
 	/* scale to int16, FIXME: find best value */
-	double out = vol * 128 / 3;
+	double out = vol * 128.0 / 3.0;
 
 	/* build volume table (2dB per step) */
 	for (int i = 0; i < 15; i++) {
@@ -85,7 +85,7 @@ void Player_V2::setMusicVolume (int vol) {
 		if (out > 0xffff)
 			_volumetable[i] = 0xffff;
 		else
-			_volumetable[i] = (int) out;
+			_volumetable[i] = (int)out;
 
 		out /= 1.258925412;         /* = 10 ^ (2/20) = 2dB */
 	}
@@ -191,7 +191,7 @@ int Player_V2::readBuffer(int16 *data, const int numSamples) {
 
 void Player_V2::lowPassFilter(int16 *sample, uint len) {
 	for (uint i = 0; i < len; i++) {
-		_level = (int) (_level * _decay
+		_level = (int)(_level * _decay
 				+ sample[0] * (0x10000 - _decay)) >> 16;
 		sample[0] = sample[1] = _level;
 		sample += 2;

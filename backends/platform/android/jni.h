@@ -30,6 +30,7 @@
 
 #include "common/fs.h"
 #include "common/archive.h"
+#include "common/array.h"
 
 class OSystem_Android;
 
@@ -58,7 +59,13 @@ public:
 	static void setWindowCaption(const char *caption);
 	static void getDPI(float *values);
 	static void displayMessageOnOSD(const char *msg);
+	static bool openUrl(const char *url);
+	static bool hasTextInClipboard();
+	static Common::String getTextFromClipboard();
+	static bool setTextInClipboard(const Common::String &text);
+	static bool isConnectionLimited();
 	static void showVirtualKeyboard(bool enable);
+	static void showKeyboardControl(bool enable);
 	static void addSysArchivesToSearchSet(Common::SearchSet &s, int priority);
 
 	static inline bool haveSurface();
@@ -72,6 +79,8 @@ public:
 
 	static inline int writeAudio(JNIEnv *env, jbyteArray &data, int offset,
 									int size);
+
+	static Common::Array<Common::String> getAllStorageLocations();
 
 private:
 	static JavaVM *_vm;
@@ -89,9 +98,16 @@ private:
 
 	static jmethodID _MID_getDPI;
 	static jmethodID _MID_displayMessageOnOSD;
+	static jmethodID _MID_openUrl;
+	static jmethodID _MID_hasTextInClipboard;
+	static jmethodID _MID_getTextFromClipboard;
+	static jmethodID _MID_setTextInClipboard;
+	static jmethodID _MID_isConnectionLimited;
 	static jmethodID _MID_setWindowCaption;
 	static jmethodID _MID_showVirtualKeyboard;
+	static jmethodID _MID_showKeyboardControl;
 	static jmethodID _MID_getSysArchives;
+	static jmethodID _MID_getAllStorageLocations;
 	static jmethodID _MID_initSurface;
 	static jmethodID _MID_deinitSurface;
 
@@ -119,10 +135,10 @@ private:
 	static jint main(JNIEnv *env, jobject self, jobjectArray args);
 
 	static void pushEvent(JNIEnv *env, jobject self, int type, int arg1,
-							int arg2, int arg3, int arg4, int arg5);
-	static void enableZoning(JNIEnv *env, jobject self, jboolean enable);
-
+							int arg2, int arg3, int arg4, int arg5, int arg6);
 	static void setPause(JNIEnv *env, jobject self, jboolean value);
+
+	static jstring getCurrentCharset(JNIEnv *env, jobject self);
 };
 
 inline bool JNI::haveSurface() {

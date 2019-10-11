@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -29,6 +29,12 @@
 
 namespace MADS {
 
+enum PopupEdge {
+	EDGE_UPPER_LEFT = 0, EDGE_UPPER_RIGHT = 1, EDGE_LOWER_LEFT = 2,
+	EDGE_LOWER_RIGHT = 3, EDGE_LEFT = 4, EDGE_RIGHT = 5, EDGE_TOP = 6,
+	EDGE_BOTTOM = 7, EDGE_UPPER_CENTER = 8
+};
+
 Dialog::Dialog(MADSEngine *vm)
 	: _vm(vm), _savedSurface(nullptr), _position(Common::Point(-1, -1)),
 	  _width(0), _height(0) {
@@ -43,24 +49,23 @@ Dialog::Dialog(MADSEngine *vm)
 }
 
 Dialog::~Dialog() {
+	delete _savedSurface;
 }
 
 void Dialog::save() {
 	_savedSurface = new MSurface(_width, _height);
-	_vm->_screen.copyTo(_savedSurface,
+	_savedSurface->blitFrom(*_vm->_screen,
 		Common::Rect(_position.x, _position.y, _position.x + _width, _position.y + _height),
 		Common::Point());
 
-	_vm->_screen.copyRectToScreen(getBounds());
+//	_vm->_screen->copyRectToScreen(getBounds());
 }
 
 void Dialog::restore() {
 	if (_savedSurface) {
-		_savedSurface->copyTo(&_vm->_screen, _position);
+		_vm->_screen->blitFrom(*_savedSurface, _position);
 		delete _savedSurface;
 		_savedSurface = nullptr;
-
-		_vm->_screen.copyRectToScreen(getBounds());
 
 		Common::copy(&_dialogPalette[0], &_dialogPalette[8 * 3],
 			&_vm->_palette->_mainPalette[248 * 3]);
@@ -80,16 +85,16 @@ void Dialog::draw() {
 	// Draw the dialog
 	// Fill entire content of dialog
 	Common::Rect bounds = getBounds();
-	_vm->_screen.fillRect(bounds, TEXTDIALOG_BACKGROUND);
+	_vm->_screen->fillRect(bounds, TEXTDIALOG_BACKGROUND);
 
 	// Draw the outer edge lines
-	_vm->_screen.hLine(_position.x + 1, _position.y + _height - 2,
+	_vm->_screen->hLine(_position.x + 1, _position.y + _height - 2,
 		_position.x + _width - 2, TEXTDIALOG_EDGE);
-	_vm->_screen.hLine(_position.x, _position.y + _height - 1,
+	_vm->_screen->hLine(_position.x, _position.y + _height - 1,
 		_position.x + _width - 1, TEXTDIALOG_EDGE);
-	_vm->_screen.vLine(_position.x + _width - 2, _position.y + 2,
+	_vm->_screen->vLine(_position.x + _width - 2, _position.y + 2,
 		_position.y + _height - 2, TEXTDIALOG_EDGE);
-	_vm->_screen.vLine(_position.x + _width - 1, _position.y + 1,
+	_vm->_screen->vLine(_position.x + _width - 1, _position.y + 1,
 		_position.y + _height - 1, TEXTDIALOG_EDGE);
 
 	// Draw the gravelly dialog content
@@ -118,8 +123,9 @@ void Dialog::calculateBounds() {
 void Dialog::drawContent(const Common::Rect &r, int seed, byte color1, byte color2) {
 	uint16 currSeed = seed ? seed : 0xB78E;
 
+	Graphics::Surface dest = _vm->_screen->getSubArea(r);
 	for (int yp = 0; yp < r.height(); ++yp) {
-		byte *destP = _vm->_screen.getBasePtr(r.left, r.top + yp);
+		byte *destP = (byte *)dest.getBasePtr(0, yp);
 
 		for (int xp = 0; xp < r.width(); ++xp) {
 			uint16 seedAdjust = currSeed;
@@ -139,15 +145,38 @@ void Dialog::drawContent(const Common::Rect &r, int seed, byte color1, byte colo
 TextDialog::TextDialog(MADSEngine *vm, const Common::String &fontName,
 		const Common::Point &pos, int maxChars)
 	: Dialog(vm) {
-	_vm = vm;
 	_font = _vm->_font->getFont(fontName);
 	_position = pos;
-
+	_portrait = nullptr;
+	_edgeSeries = nullptr;
+	_piecesPerCenter = 0;
+	_fontSpacing = 0;
 	_vm->_font->setColors(TEXTDIALOG_BLACK, TEXTDIALOG_BLACK, TEXTDIALOG_BLACK, TEXTDIALOG_BLACK);
+	_piecesPerCenter = 0;
 
-	_innerWidth = (_font->maxWidth() + 1) * maxChars;
+	init(maxChars);
+}
+
+TextDialog::TextDialog(MADSEngine *vm, const Common::String &fontName,
+		const Common::Point &pos, MSurface *portrait, int maxTextChars): Dialog(vm) {
+	_font = _vm->_font->getFont(fontName);
+	_position = pos;
+	_portrait = portrait;
+	_edgeSeries = new SpriteAsset(_vm, "box.ss", PALFLAG_RESERVED);
+	_vm->_font->setColors(TEXTDIALOG_BLACK, TEXTDIALOG_BLACK, TEXTDIALOG_BLACK, TEXTDIALOG_BLACK);
+	_piecesPerCenter = _edgeSeries->getFrame(EDGE_UPPER_CENTER)->w / _edgeSeries->getFrame(EDGE_BOTTOM)->w;
+	_fontSpacing = 0;
+
+	int maxLen = estimatePieces(maxTextChars);
+	init(maxLen);
+}
+
+void TextDialog::init(int maxTextChars) {
+	_innerWidth = (_font->maxWidth() + 1) * maxTextChars;
 	_width = _innerWidth + 10;
-	_lineSize = maxChars * 2;
+	if (_portrait != nullptr)
+		_width += _portrait->w + 10;
+	_lineSize = maxTextChars * 2;
 	_lineWidth = 0;
 	_currentX = 0;
 	_numLines = 0;
@@ -156,7 +185,16 @@ TextDialog::TextDialog(MADSEngine *vm, const Common::String &fontName,
 	_askXp = 0;
 }
 
+int TextDialog::estimatePieces(int maxLen) {
+	int fontLen = (_font->maxWidth() + _fontSpacing) * maxLen;
+	int pieces = ((fontLen - 1) / _edgeSeries->getFrame(EDGE_TOP)->w) + 1;
+	int estimate = (pieces - _piecesPerCenter) / 2;
+
+	return estimate;
+}
+
 TextDialog::~TextDialog() {
+	delete _edgeSeries;
 }
 
 void TextDialog::addLine(const Common::String &line, bool underline) {
@@ -284,12 +322,26 @@ void TextDialog::draw() {
 	// Draw the underlying dialog
 	Dialog::draw();
 
+	// Draw the edges
+	if (_edgeSeries != nullptr) {
+		//_vm->_screen->transBlitFrom(*_edgeSeries->getFrame(EDGE_UPPER_LEFT), _position, 0xFF);
+		//_vm->_screen->transBlitFrom(*_edgeSeries->getFrame(EDGE_UPPER_RIGHT), _position);
+		//_vm->_screen->transBlitFrom(*_edgeSeries->getFrame(EDGE_LOWER_LEFT), Common::Point(_position.x, _position.y + _height));
+		//_vm->_screen->transBlitFrom(*_edgeSeries->getFrame(EDGE_LOWER_RIGHT), _position);
+	}
+
+	// Draw the portrait
+	if (_portrait != nullptr) {
+		Common::Point portraitPos = Common::Point(_position.x + 5, _position.y + 5);
+		_vm->_screen->transBlitFrom(*_portrait, portraitPos, 0xFF);
+	}
+
 	// Draw the text lines
 	int lineYp = _position.y + 5;
 	for (int lineNum = 0; lineNum <= _numLines; ++lineNum) {
 		if (_lineXp[lineNum] == -1) {
 			// Draw a line across the entire dialog
-			_vm->_screen.hLine(_position.x + 2,
+			_vm->_screen->hLine(_position.x + 2,
 				lineYp + (_font->getHeight() + 1)  / 2,
 				_position.x + _width - 4, TEXTDIALOG_BLACK);
 		} else {
@@ -299,21 +351,22 @@ void TextDialog::draw() {
 			if (_lineXp[lineNum] & 0x40)
 				++yp;
 
-			_font->writeString(&_vm->_screen, _lines[lineNum],
+			if (_portrait != nullptr)
+				xp += _portrait->w + 5;
+
+			_font->writeString(_vm->_screen, _lines[lineNum],
 				Common::Point(xp, yp), 1);
 
 			if (_lineXp[lineNum] & 0x80) {
 				// Draw an underline under the text
 				int lineWidth = _font->getWidth(_lines[lineNum], 1);
-				_vm->_screen.hLine(xp, yp + _font->getHeight(), xp + lineWidth,
+				_vm->_screen->hLine(xp, yp + _font->getHeight(), xp + lineWidth,
 					TEXTDIALOG_BLACK);
 			}
 		}
 
 		lineYp += _font->getHeight() + 1;
 	}
-
-	_vm->_screen.copyRectToScreen(getBounds());
 }
 
 void TextDialog::calculateBounds() {
@@ -323,10 +376,10 @@ void TextDialog::calculateBounds() {
 	if (_position.y == -1)
 		_position.y = 100 - (_height / 2);
 
-	if ((_position.x + _width) > _vm->_screen.getWidth())
-		_position.x = _vm->_screen.getWidth() - (_position.x + _width);
-	if ((_position.y + _height) > _vm->_screen.getHeight())
-		_position.y = _vm->_screen.getHeight() - (_position.y + _height);
+	if ((_position.x + _width) > _vm->_screen->w)
+		_position.x = _vm->_screen->w - (_position.x + _width);
+	if ((_position.y + _height) > _vm->_screen->h)
+		_position.y = _vm->_screen->h - (_position.y + _height);
 }
 
 void TextDialog::drawWithInput() {
@@ -383,6 +436,8 @@ MessageDialog::MessageDialog(MADSEngine *vm, int maxChars, ...)
 Dialogs *Dialogs::init(MADSEngine *vm) {
 	if (vm->getGameID() == GType_RexNebular)
 		return new Nebular::DialogsNebular(vm);
+	//else if (vm->getGameID() == GType_Phantom)
+	//	return new Phantom::DialogsPhantom(vm);
 
 	// Throw a warning for now, since the associated Dialogs class isn't implemented yet
 	warning("Dialogs: Unknown game");
@@ -415,7 +470,7 @@ FullScreenDialog::FullScreenDialog(MADSEngine *vm) : _vm(vm) {
 }
 
 FullScreenDialog::~FullScreenDialog() {
-	_vm->_screen.resetClipBounds();
+	_vm->_screen->resetClipBounds();
 	_vm->_game->_scene.restrictScene();
 }
 
@@ -430,6 +485,7 @@ void FullScreenDialog::display() {
 	if (_screenId > 0) {
 		SceneInfo *sceneInfo = SceneInfo::init(_vm);
 		sceneInfo->load(_screenId, 0, "", 0, scene._depthSurface, scene._backgroundSurface);
+		delete sceneInfo;
 	}
 
 	scene._priorSceneId = priorSceneId;
@@ -453,16 +509,13 @@ void FullScreenDialog::display() {
 	game._trigger = 0;
 
 	// Clear the screen and draw the upper and lower horizontal lines
-	_vm->_screen.empty();
+	_vm->_screen->clear();
 	_vm->_palette->setLowRange();
-	_vm->_screen.hLine(0, 20, MADS_SCREEN_WIDTH, 2);
-	_vm->_screen.hLine(0, 179, MADS_SCREEN_WIDTH, 2);
-	_vm->_screen.resetClipBounds();
-	_vm->_screen.copyRectToScreen(Common::Rect(0, 0, MADS_SCREEN_WIDTH, MADS_SCREEN_HEIGHT));
+	_vm->_screen->hLine(0, 20, MADS_SCREEN_WIDTH, 2);
+	_vm->_screen->hLine(0, 179, MADS_SCREEN_WIDTH, 2);
 
 	// Restrict the screen to the area between the two lines
-	_vm->_screen.setClipBounds(Common::Rect(0, DIALOG_TOP, MADS_SCREEN_WIDTH,
-		DIALOG_TOP + MADS_SCENE_HEIGHT));
+	_vm->_screen->setClipBounds(Common::Rect(0, DIALOG_TOP, MADS_SCREEN_WIDTH, DIALOG_TOP + MADS_SCENE_HEIGHT));
 	_vm->_game->_scene.restrictScene();
 
 	if (_screenId > 0)

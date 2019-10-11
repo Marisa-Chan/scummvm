@@ -23,6 +23,7 @@
 #include "common/config-manager.h"
 #include "common/events.h"
 
+#include "queen/midiadlib.h"
 #include "queen/music.h"
 #include "queen/queen.h"
 #include "queen/resource.h"
@@ -32,8 +33,6 @@
 
 
 namespace Queen {
-
-extern MidiDriver *C_Player_CreateAdLibMidiDriver(Audio::Mixer *);
 
 MidiMusic::MidiMusic(QueenEngine *vm)
 	: _isPlaying(false), _isLooping(false),
@@ -69,7 +68,7 @@ MidiMusic::MidiMusic(QueenEngine *vm)
 //		if (READ_LE_UINT16(_musicData + 2) != infoOffset) {
 //			defaultAdLibVolume = _musicData[infoOffset];
 //		}
-		_driver = C_Player_CreateAdLibMidiDriver(vm->_mixer);
+		_driver = new AdLibMidiDriver();
 	} else {
 		_driver = MidiDriver::createMidi(dev);
 		if (_nativeMT32) {
@@ -103,10 +102,7 @@ MidiMusic::~MidiMusic() {
 }
 
 void MidiMusic::setVolume(int volume) {
-	if (volume < 0)
-		volume = 0;
-	else if (volume > 255)
-		volume = 255;
+	volume = CLIP(volume, 0, 255);
 
 	if (_masterVolume == volume)
 		return;
@@ -117,6 +113,9 @@ void MidiMusic::setVolume(int volume) {
 		if (_channelsTable[i])
 			_channelsTable[i]->volume(_channelsVolume[i] * _masterVolume / 255);
 	}
+
+	if (_adlib)
+		static_cast<AdLibMidiDriver*>(_driver)->setVolume(volume);
 }
 
 void MidiMusic::playSong(uint16 songNum) {

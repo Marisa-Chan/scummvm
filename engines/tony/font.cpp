@@ -138,7 +138,7 @@ int RMFont::stringLen(char bChar, char bNext) {
 *       RMFontColor Methods
 \****************************************************************************/
 
-RMFontColor::RMFontColor() : RMFont() {
+RMFontColor::RMFontColor() {
 	_fontR = _fontG = _fontB = 255;
 }
 
@@ -921,6 +921,12 @@ RMDialogChoice::RMDialogChoice() {
 
 	_curAdded = 0;
 	_bShow = false;
+
+	_curSelection = 0;
+	_numChoices = 0;
+
+	_drawedStrings = NULL;
+	_ptDrawStrings = NULL;
 }
 
 RMDialogChoice::~RMDialogChoice() {

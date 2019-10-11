@@ -27,9 +27,15 @@
 
 #include "mortevielle/mortevielle.h"
 #include "mortevielle/sound.h"
+#include "mortevielle/dialogs.h"
 
+#include "audio/audiostream.h"
 #include "audio/decoders/raw.h"
 #include "common/scummsys.h"
+#include "common/config-manager.h"
+#ifdef USE_TTS
+#include "common/text-to-speech.h"
+#endif
 
 namespace Mortevielle {
 
@@ -61,6 +67,16 @@ SoundManager::SoundManager(MortevielleEngine *vm, Audio::Mixer *mixer) {
 	_audioStream = nullptr;
 	_ambiantNoiseBuf = nullptr;
 	_noiseBuf = nullptr;
+#ifdef USE_TTS
+	_ttsMan = g_system->getTextToSpeechManager();
+	if (_ttsMan) {
+		_ttsMan->setLanguage(ConfMan.get("language"));
+		_ttsMan->stop();
+		_ttsMan->setRate(0);
+		_ttsMan->setPitch(0);
+		_ttsMan->setVolume(100);
+	}
+#endif //USE_TTS
 
 	_soundType = 0;
 	_phonemeNumb = 0;
@@ -139,22 +155,44 @@ void SoundManager::loadAmbiantSounds() {
  * @remarks	Originally called 'charge_bruit' and 'charge_bruit5'
  */
 void SoundManager::loadNoise() {
-	Common::File f1, f2;
+	Common::File f1, f5;
 
-	if (!f1.open("bruits"))               //Translation: "noise"
-		error("Missing file - bruits");
-	if (!f2.open("bruit5"))
+	if (!f5.open("bruit5"))
 		error("Missing file - bruit5");
 
-	_noiseBuf = (byte *)malloc(sizeof(byte) * (f1.size() + f2.size()));
-	assert(f1.size() > 32000);
+	if (f1.open("bruits")) { //Translation: "noise"
+		assert(f1.size() > 32000);
+		_noiseBuf = (byte *)malloc(sizeof(byte) * (f1.size() + f5.size()));
 
-	f1.read(_noiseBuf, 32000); // 250 * 128
-	f2.read(&_noiseBuf[32000], f2.size());
-	f1.read(&_noiseBuf[32000 + f2.size()], f1.size() - 32000); // 19072
+		f1.read(_noiseBuf, 32000); // 250 * 128
+		f5.read(&_noiseBuf[32000], f5.size());
+		f1.read(&_noiseBuf[32000 + f5.size()], f1.size() - 32000); // 19072
 
-	f1.close();
-	f2.close();
+		f1.close();
+	} else {
+		Common::File f2, f3, f4;
+		if (!f1.open("bruit1") || !f2.open("bruit2") || !f3.open("bruit3") || !f4.open("bruit4"))
+			error("Missing file - bruits");
+
+		assert(f4.size() == 32000);
+		_noiseBuf = (byte *)malloc(sizeof(byte) * (f1.size() + f2.size() + f3.size() + f4.size() + f5.size()));
+
+		f4.read(_noiseBuf, f4.size());
+		int pos = f4.size();
+		f5.read(&_noiseBuf[pos], f5.size());
+		pos += f5.size();
+		f1.read(&_noiseBuf[pos], f1.size());
+		pos += f1.size();
+		f2.read(&_noiseBuf[pos], f2.size());
+		pos += f2.size();
+		f3.read(&_noiseBuf[pos], f3.size());
+
+		f1.close();
+		f2.close();
+		f3.close();
+		f4.close();
+	}
+	f5.close();
 }
 
 void SoundManager::regenbruit() {
@@ -166,13 +204,15 @@ void SoundManager::regenbruit() {
 }
 
 void SoundManager::litph(tablint &t, int typ, int tempo) {
-	// Skip speech
-	if (_soundType == 0)
-		return;
-
 	if (!_buildingSentence) {
 		if (_mixer->isSoundHandleActive(_soundHandle))
 			_mixer->stopHandle(_soundHandle);
+#ifdef USE_TTS
+		if (_ttsMan) {
+			if (_ttsMan->isSpeaking())
+				_ttsMan->stop();
+		}
+#endif // USE_TTS
 		_buildingSentence = true;
 	}
 	int freq = tempo * 252; // 25.2 * 10
@@ -184,9 +224,7 @@ void SoundManager::litph(tablint &t, int typ, int tempo) {
 		case 0: {
 			int val = _troctBuf[i];
 			i++;
-			if (_soundType == 0)
-				warning("TODO: vclas");
-			else if (_soundType == 1) {
+			if (_soundType == 1) {
 				debugC(5, kMortevielleSounds, "litph - duson");
 				const static int noiseAdr[] = {0,     17224,
 											   17224, 33676,
@@ -235,10 +273,6 @@ void SoundManager::litph(tablint &t, int typ, int tempo) {
 		case 4:
 			if (_soundType) {
 				i += 2;
-			} else {
-				// Speech
-				warning("TODO: Interphoneme: consonne:%d voyelle:%d", _troctBuf[i], _troctBuf[i + 1]);
-				i += 2;
 			}
 			break;
 		case 6:
@@ -285,13 +319,6 @@ void SoundManager::playSong(const byte* buf, uint size, uint loops) {
 
 void SoundManager::spfrac(int wor) {
 	_queue[2]._rep = (uint)wor >> 12;
-	if ((_soundType == 0) && (_queue[2]._code != 9)) {
-		if (((_queue[2]._code > 4) && (_queue[2]._val != 20) && (_queue[2]._rep != 3) && (_queue[2]._rep != 6) && (_queue[2]._rep != 9)) ||
-				((_queue[2]._code < 5) && ((_queue[2]._val != 19) && (_queue[2]._val != 22) && (_queue[2]._rep != 4) && (_queue[2]._rep != 9)))) {
-			++_queue[2]._rep;
-		}
-	}
-
 	_queue[2]._freq = ((uint)wor >> 6) & 7;
 	_queue[2]._acc = ((uint)wor >> 9) & 7;
 }
@@ -735,28 +762,60 @@ void SoundManager::handlePhoneme() {
  * Start speech
  * @remarks	Originally called 'parole'
  */
-void SoundManager::startSpeech(int rep, int ht, int typ) {
-	uint16 savph[501];
-	int tempo;
-
-	// Hack to avoid a crash in the ending version. To be removed when the speech are implemented
-	if ((rep == 141) && (typ == 0))
-		return;
-
+void SoundManager::startSpeech(int rep, int character, int typ) {
 	if (_vm->_soundOff)
 		return;
 
-	_phonemeNumb = rep;
-	int haut = ht;
 	_soundType = typ;
-	if (_soundType != 0) {
-		for (int i = 0; i <= 500; ++i)
-			savph[i] = _cfiphBuffer[i];
-		tempo = kTempoNoise;
-	} else if (haut > 5)
-		tempo = kTempoF;
-	else
-		tempo = kTempoM;
+
+	if (typ == 0) {
+		// Speech
+#ifdef USE_TTS
+		const int haut[9] = { 0, 0, 1, -3, 6, -2, 2, 7, -1 };
+		const int voiceIndices[9] = { 0, 1, 2, 3, 0, 4, 5, 1, 6 };
+		if (!_ttsMan)
+			return;
+		Common::Array<int> voices;
+		int pitch = haut[character];
+		bool male;
+		if (haut[character] > 5) {
+			voices = _ttsMan->getVoiceIndicesByGender(Common::TTSVoice::FEMALE);
+			male = false;
+			pitch -= 6;
+		} else {
+			voices = _ttsMan->getVoiceIndicesByGender(Common::TTSVoice::MALE);
+			male = true;
+		}
+		pitch *= 5;
+		// If there is no voice available for the given gender, just set it to the 0th
+		// voice
+		if (voices.empty())
+			_ttsMan->setVoice(0);
+		else {
+			int voiceIndex = voiceIndices[character] % voices.size();
+			_ttsMan->setVoice(voices[voiceIndex]);
+		}
+		// If the selected voice is a different gender, than we want, just try to
+		// set the pitch so it may sound a little bit closer to the gender we want
+		if (!((_ttsMan->getVoice().getGender() == Common::TTSVoice::MALE) == male)) {
+			if (male)
+				pitch -= 50;
+			else
+				pitch += 50;
+		}
+
+		_ttsMan->setPitch(pitch);
+		_ttsMan->say(_vm->getString(rep + kDialogStringIndex), "CP850");
+#endif // USE_TTS
+		return;
+	}
+	uint16 savph[501];
+	int tempo;
+
+	_phonemeNumb = rep;
+	for (int i = 0; i <= 500; ++i)
+		savph[i] = _cfiphBuffer[i];
+	tempo = kTempoNoise;
 	_vm->_addFix = (float)((tempo - 8)) / 256;
 	cctable(_tbi);
 	switch (typ) {
@@ -773,25 +832,32 @@ void SoundManager::startSpeech(int rep, int ht, int typ) {
 	litph(_tbi, typ, tempo);
 
 	_buildingSentence = false;
-	if (typ != 0) {
-		_audioStream->finish();
-		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundHandle, _audioStream);
-		_audioStream = nullptr;
-	}
+	_audioStream->finish();
+	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundHandle, _audioStream);
+	_audioStream = nullptr;
 
-	if (_soundType != 0) {
-		for (int i = 0; i <= 500; ++i)
-			_cfiphBuffer[i] = savph[i];
-	}
+	for (int i = 0; i <= 500; ++i)
+		_cfiphBuffer[i] = savph[i];
 	_vm->setPal(_vm->_numpal);
 }
 
 void SoundManager::waitSpeech() {
-	while (_mixer->isSoundHandleActive(_soundHandle) && !_vm->keyPressed() && !_vm->_mouseClick && !_vm->shouldQuit())
-		;
-	// In case the handle is still active, stop it.
-	_mixer->stopHandle(_soundHandle);
+	if (_soundType == 0) {
+#ifdef USE_TTS
+		if (!_ttsMan)
+			return;
+		while (_ttsMan->isSpeaking() && !_vm->keyPressed() && !_vm->_mouseClick && !_vm->shouldQuit())
+			;
+		// In case the TTS is still speaking, stop it.
+		_ttsMan->stop();
 
+#endif // USE_TTS
+	} else {
+		while (_mixer->isSoundHandleActive(_soundHandle) && !_vm->keyPressed() && !_vm->_mouseClick && !_vm->shouldQuit())
+			;
+		// In case the handle is still active, stop it.
+		_mixer->stopHandle(_soundHandle);
+	}
 	if (!_vm->keyPressed() && !_vm->_mouseClick && !_vm->shouldQuit())
 		g_system->delayMillis(600);
 }

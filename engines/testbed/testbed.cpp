@@ -38,7 +38,17 @@
 #include "testbed/misc.h"
 #include "testbed/savegame.h"
 #include "testbed/sound.h"
+#include "testbed/encoding.h"
 #include "testbed/testbed.h"
+#ifdef USE_CLOUD
+#include "testbed/cloud.h"
+#endif
+#ifdef USE_SDL_NET
+#include "testbed/webserver.h"
+#endif
+#ifdef USE_TTS
+#include "testbed/speech.h"
+#endif
 
 namespace Testbed {
 
@@ -113,8 +123,9 @@ TestbedEngine::TestbedEngine(OSystem *syst)
 	DebugMan.enableDebugChannel("LOG");
 
 	// Initialize testsuites here
+	Testsuite *ts;
 	// GFX
-	Testsuite *ts = new GFXTestSuite();
+	ts = new GFXTestSuite();
 	_testsuiteList.push_back(ts);
 	// FS
 	ts = new FSTestSuite();
@@ -134,6 +145,23 @@ TestbedEngine::TestbedEngine(OSystem *syst)
 	// Midi
 	ts = new MidiTestSuite();
 	_testsuiteList.push_back(ts);
+#ifdef USE_TTS
+	 // TextToSpeech
+	 ts = new SpeechTestSuite();
+	 _testsuiteList.push_back(ts);
+#endif
+#if defined(USE_CLOUD) && defined(USE_LIBCURL)
+	// Cloud
+	ts = new CloudTestSuite();
+	_testsuiteList.push_back(ts);
+#endif
+#ifdef USE_SDL_NET
+	// Webserver
+	ts = new WebserverTestSuite();
+	_testsuiteList.push_back(ts);
+#endif
+	ts = new EncodingTestSuite();
+	_testsuiteList.push_back(ts);
 }
 
 TestbedEngine::~TestbedEngine() {
@@ -152,6 +180,9 @@ void TestbedEngine::invokeTestsuites(TestbedConfigManager &cfMan) {
 	Common::Point pt = Testsuite::getDisplayRegionCoordinates();
 	int numSuitesEnabled = cfMan.getNumSuitesEnabled();
 
+	if (!numSuitesEnabled)
+		return;
+
 	for (iter = _testsuiteList.begin(); iter != _testsuiteList.end(); iter++) {
 		if (shouldQuit()) {
 			return;
@@ -166,7 +197,7 @@ void TestbedEngine::invokeTestsuites(TestbedConfigManager &cfMan) {
 
 Common::Error TestbedEngine::run() {
 	// Initialize graphics using following:
-	initGraphics(320, 200, false);
+	initGraphics(320, 200);
 
 	// As of now we are using GUI::MessageDialog for interaction, Test if it works.
 	// interactive mode could also be modified by a config parameter "non-interactive=1"

@@ -95,10 +95,10 @@ static const char *const kEoB1ChargenAlignmentStringsDOSItalian[9] = {
 	"CAOTICO BUONO",
 	"LEGALE NEUTRALE",
 	"NEUTRALE PURO",
-	"CAOTICO NEUT.",
+	"CAOTICO NEUTRALE",
 	"LEGALE MALVAGIO",
-	"NEUTRALE MALV.",
-	"CAOTICO MALV."
+	"NEUTRALE MALVAGIO",
+	"CAOTICO MALVAGIO"
 };
 
 static const StringListProvider kEoB1ChargenAlignmentStringsDOSItalianProvider = { ARRAYSIZE(kEoB1ChargenAlignmentStringsDOSItalian), kEoB1ChargenAlignmentStringsDOSItalian };
@@ -285,7 +285,7 @@ static const char *const kEoB1MagicObjectStringsDOSItalian[5] = {
 	"Pergamena del Chierico",
 	"Anello",
 	"Pozione",
-	"bacchetta"
+	"Bacchetta"
 };
 
 static const StringListProvider kEoB1MagicObjectStringsDOSItalianProvider = { ARRAYSIZE(kEoB1MagicObjectStringsDOSItalian), kEoB1MagicObjectStringsDOSItalian };
@@ -341,7 +341,7 @@ static const char *const kEoB1WandStringsDOSItalian[2] = {
 static const StringListProvider kEoB1WandStringsDOSItalianProvider = { ARRAYSIZE(kEoB1WandStringsDOSItalian), kEoB1WandStringsDOSItalian };
 
 static const char *const kEoB1ItemMisuseStringsDOSItalian[3] = {
-	" non pu""\x11"" usare quest'oggetto.\r",
+	"%s non pu""\x11"" usare quest'oggetto.\r",
 	"Se indossato quest'oggetto funziona in automatico.\r",
 	"Questo oggetto non si usa cos""\x10"".\r"
 };
@@ -573,7 +573,7 @@ static const StringListProvider kEoB1CharGuiStringsWp1DOSItalianProvider = { ARR
 
 static const char *const kEoB1CharGuiStringsWrDOSItalian[4] = {
 	"FUORI",
-	"PORTATA",
+	"TIRO",
 	"NESSUNA",
 	"MUNIZIONE"
 };
@@ -592,7 +592,7 @@ static const char *const kEoB1CharGuiStringsSt1DOSItalian[6] = {
 static const StringListProvider kEoB1CharGuiStringsSt1DOSItalianProvider = { ARRAYSIZE(kEoB1CharGuiStringsSt1DOSItalian), kEoB1CharGuiStringsSt1DOSItalian };
 
 static const char *const kEoB1CharGuiStringsInDOSItalian[4] = {
-	"INFO PERSONAGGIO",
+	"INFO EROE",
 	"CLASSE ARMATURA",
 	"ESP",
 	"LIV"
@@ -674,12 +674,12 @@ static const StringListProvider kEoB1MageSpellsListDOSItalianProvider = { ARRAYS
 static const char *const kEoB1ClericSpellsListDOSItalian[25] = {
 	"",
 	"Benedizione",
-	"Cura Fer.L.",
-	"Causa Fer.L.",
+	"Cura Ferite L.",
+	"Causa Ferite L.",
 	"Individua Magico",
-	"Protez.Male",
+	"Protezione dal Male",
 	"Aiuto",
-	"Lama Fiammegg.",
+	"Lama Fiammeggiante",
 	"Blocca Persone",
 	"Rallenta Veleno",
 	"Creare Cibo",
@@ -687,13 +687,13 @@ static const char *const kEoB1ClericSpellsListDOSItalian[25] = {
 	"Paramenti Magici",
 	"Preghiera",
 	"Rimuovi Paralisi",
-	"Cura Fer.G.",
-	"Causa Fer.G.",
-	"Neutral.Veleni",
-	"Protez.Male 3m",
-	"Protez.Fulmine",
-	"Cura Fer.C.",
-	"Causa Fer.C.",
+	"Cura Ferite G.",
+	"Causa Ferite G.",
+	"Neutralizza Veleni",
+	"Protezione Male 3m",
+	"Protezione Fulmine",
+	"Cura Ferite C.",
+	"Causa Ferite C.",
 	"Colonna di Fuoco",
 	"Rianimare Morti",
 	"Imposizione Mani"
@@ -816,7 +816,13 @@ static const char *const kEoB1MagicStrings8DOSItalian[3] = {
 };
 
 static const StringListProvider kEoB1MagicStrings8DOSItalianProvider = { ARRAYSIZE(kEoB1MagicStrings8DOSItalian), kEoB1MagicStrings8DOSItalian };
+/*
+static const char *const kEoB1MagicStrings9DOSItalian[1] = {
+	"%s e gia protetto da pelle di pietra.\r"
+};
 
+static const StringListProvider kEoB1MagicStrings9DOSItalianProvider = { ARRAYSIZE(kEoB1MagicStrings9DOSItalian), kEoB1MagicStrings9DOSItalian };
+*/
 static const byte kEoB1ManDefDOSItalian[120] = {
 	0x09, 0x0A, 0x02, 0x00, 0x09, 0x04, 0x03, 0x00,
 	0x09, 0x06, 0x06, 0x00, 0x09, 0x03, 0x03, 0x00,

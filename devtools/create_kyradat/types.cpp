@@ -120,6 +120,9 @@ void writeResource(PAKFile &out, const char *filename, ResTypes type, const void
 	case kEoBNpcData:
 		writeEoBNpcData(out, filename, (const EoBCharacterProvider *)provider);
 		break;
+
+	default:
+		break;
 	}
 }
 
@@ -132,7 +135,7 @@ static void writeStringList(PAKFile &out, const char *filename, const StringList
 
 	// Step 2: Write data
 	byte *const output = new byte[size];
-	
+
 	byte *dst = output;
 	WRITE_BE_UINT32(dst, provider->numEntries); dst += 4;
 	for (uint i = 0; i < provider->numEntries; ++i) {

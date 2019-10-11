@@ -1,24 +1,24 @@
 /* ScummVM - Graphic Adventure Engine
-*
-* ScummVM is the legal property of its developers, whose names
-* are too numerous to list here. Please refer to the COPYRIGHT
-* file distributed with this source distribution.
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* as published by the Free Software Foundation; either version 2
-* of the License, or (at your option) any later version.
-
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-*
-*/
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ */
 
 #include "common/scummsys.h"
 
@@ -196,7 +196,7 @@ void RenderManager::readImageToSurface(const Common::String &fileName, Graphics:
 	uint32 imageHeight;
 	Image::TGADecoder tga;
 	uint16 *buffer;
-	// All ZVision images are in RGB 555
+	// All Z-Vision images are in RGB 555
 	destination.format = _engine->_resourcePixelFormat;
 
 	bool isTGZ;
@@ -753,13 +753,12 @@ void RenderManager::processSubs(uint16 deltatime) {
 		for (SubtitleMap::iterator it = _subsList.begin(); it != _subsList.end(); it++) {
 			OneSubtitle *sub = &it->_value;
 			if (sub->txt.size()) {
-				Graphics::Surface *rndr = new Graphics::Surface();
-				rndr->create(sub->r.width(), sub->r.height(), _engine->_resourcePixelFormat);
-				_engine->getTextRenderer()->drawTxtInOneLine(sub->txt, *rndr);
+				Graphics::Surface subtitleSurface;
+				subtitleSurface.create(sub->r.width(), sub->r.height(), _engine->_resourcePixelFormat);
+				_engine->getTextRenderer()->drawTextWithWordWrapping(sub->txt, subtitleSurface);
 				Common::Rect empty;
-				blitSurfaceToSurface(*rndr, empty, _subtitleSurface, sub->r.left - _subtitleArea.left + _workingWindow.left, sub->r.top - _subtitleArea.top + _workingWindow.top);
-				rndr->free();
-				delete rndr;
+				blitSurfaceToSurface(subtitleSurface, empty, _subtitleSurface, sub->r.left - _subtitleArea.left + _workingWindow.left, sub->r.top - _subtitleArea.top + _workingWindow.top);
+				subtitleSurface.free();
 			}
 			sub->redraw = false;
 		}
@@ -971,16 +970,15 @@ void RenderManager::bkgFill(uint8 r, uint8 g, uint8 b) {
 void RenderManager::timedMessage(const Common::String &str, uint16 milsecs) {
 	uint16 msgid = createSubArea();
 	updateSubArea(msgid, str);
-	processSubs(0);
-	renderSceneToScreen();
 	deleteSubArea(msgid, milsecs);
 }
 
 bool RenderManager::askQuestion(const Common::String &str) {
-	uint16 msgid = createSubArea();
-	updateSubArea(msgid, str);
-	processSubs(0);
-	renderSceneToScreen();
+	Graphics::Surface textSurface;
+	textSurface.create(_subtitleArea.width(), _subtitleArea.height(), _engine->_resourcePixelFormat);
+	_engine->getTextRenderer()->drawTextWithWordWrapping(str, textSurface);
+	copyToScreen(textSurface, _subtitleArea, 0, 0);
+
 	_engine->stopClock();
 
 	int result = 0;
@@ -1031,7 +1029,14 @@ bool RenderManager::askQuestion(const Common::String &str) {
 		else
 			_system->delayMillis(66);
 	}
-	deleteSubArea(msgid);
+
+	// Draw over the text in order to clear it
+	textSurface.fillRect(Common::Rect(_subtitleArea.width(), _subtitleArea.height()), 0);
+	copyToScreen(textSurface, _subtitleArea, 0, 0);
+
+	// Free the surface
+	textSurface.free();
+
 	_engine->startClock();
 	return result == 2;
 }
@@ -1103,7 +1108,7 @@ void RenderManager::updateRotation() {
 			int16 newPosition = startPosition + _velocity;
 
 			int16 screenHeight = getBkgSize().y;
-			int16 tiltGap = _renderTable.getTiltGap();
+			int16 tiltGap = (int16)_renderTable.getTiltGap();
 
 			if (newPosition >= (screenHeight - tiltGap))
 				newPosition = screenHeight - tiltGap;
@@ -1138,7 +1143,7 @@ void RenderManager::checkBorders() {
 		int16 newPosition = startPosition;
 
 		int16 screenHeight = getBkgSize().y;
-		int16 tiltGap = _renderTable.getTiltGap();
+		int16 tiltGap = (int16)_renderTable.getTiltGap();
 
 		if (newPosition >= (screenHeight - tiltGap))
 			newPosition = screenHeight - tiltGap;

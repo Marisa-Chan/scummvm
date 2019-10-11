@@ -24,7 +24,7 @@ namespace Tony {
 
 static const TonyGameDescription gameDescriptions[] = {
 	{
-		// Tony Tough English
+		// Tony Tough English not installed
 		{
 			"tony",
 			0,
@@ -32,14 +32,30 @@ static const TonyGameDescription gameDescriptions[] = {
 				// TODO: AdvancedDetector seems to have a problem where it thinks data1.cab is unrecognized.
 				// Is it perhaps because the Agos engine also has detection entries for data1.cab?
 				{"data1.cab", 0, "ce82907242166bfb594d97bdb68f96d2", 4350},
-				/*{"roasted.mpr", 0, "06203dbbc85fdd1e6dc8fc211c1a6207", 135911071},
-				{"roasted.mpc", 0, "57c4a3860cf899443c357e0078ea6f49", 366773},*/
 				AD_LISTEND
 			},
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
+		},
+	},
+
+	{
+		// Tony Tough Czech not installed
+		{
+			"tony",
+			0,
+			{
+				// TODO: AdvancedDetector seems to have a problem where it thinks data1.cab is unrecognized.
+				// Is it perhaps because the Agos engine also has detection entries for data1.cab?
+				{"data1.cab", 0, "c6d5dd8f0c1241a6e3f7861b7f27bf7b", 4350},
+				AD_LISTEND
+			},
+			Common::CZ_CZE,
+			Common::kPlatformWindows,
+			ADGF_NO_FLAGS,
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -56,7 +72,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_DEMO,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -72,7 +88,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_DEMO | GF_COMPRESSED,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -89,7 +105,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::FR_FRA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -106,7 +122,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -123,7 +139,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::IT_ITA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -140,7 +156,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::IT_ITA,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -157,7 +173,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::PL_POL,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -174,7 +190,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::DE_DEU,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -192,7 +208,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::CZ_CZE,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -209,7 +225,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -226,7 +242,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::EN_ANY,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 
@@ -243,7 +259,7 @@ static const TonyGameDescription gameDescriptions[] = {
 			Common::RU_RUS,
 			Common::kPlatformWindows,
 			ADGF_NO_FLAGS,
-			GUIO1(GUIO_NONE)
+			GUIO1(GUIO_NOMIDI)
 		},
 	},
 

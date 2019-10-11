@@ -44,7 +44,7 @@ static const ADGameDescription gameDescriptions[] = {
 			{"study.svl", 0, "281efa3f33f6712c0f641a605f4d40fd", 2511090},
 			AD_LISTEND
 		},
-		Common::EN_ANY, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO0()
+		Common::EN_ANY, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO1(GUIO_NOMIDI)
 	},
 	{
 		"toon", "",
@@ -54,7 +54,7 @@ static const ADGameDescription gameDescriptions[] = {
 			{"study.svl", 0, "df056b94ea83f1ed92a539cf636053ab", 2542668},
 			AD_LISTEND
 		},
-		Common::FR_FRA, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO0()
+		Common::FR_FRA, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO1(GUIO_NOMIDI)
 	},
 	{
 		"toon", "",
@@ -64,7 +64,7 @@ static const ADGameDescription gameDescriptions[] = {
 			{"study.svl", 0, "72fe96a9e10967d3138e918295babc42", 2910283},
 			AD_LISTEND
 		},
-		Common::DE_DEU, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO0()
+		Common::DE_DEU, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO1(GUIO_NOMIDI)
 	},
 	{
 		"toon", "",
@@ -74,7 +74,7 @@ static const ADGameDescription gameDescriptions[] = {
 			{"study.svl", 0, "b6b1ee2d9d94d53d305856039ab7bde7", 2634620},
 			AD_LISTEND
 		},
-		Common::ES_ESP, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO0()
+		Common::ES_ESP, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO1(GUIO_NOMIDI)
 	},
 	{
 		"toon", "",
@@ -83,7 +83,7 @@ static const ADGameDescription gameDescriptions[] = {
 			{"arcaddbl.svl", 0, "1d1b96e317e03ffd3874a8ebe59556f3", 6246232},
 			{"study.svl", 0, "d4aff126ee27be3c3d25e2996369d7cb", 2324368},
 		},
-		Common::RU_RUS, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO0()
+		Common::RU_RUS, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO1(GUIO_NOMIDI)
 	},
 	{
 		"toon", "",
@@ -93,7 +93,7 @@ static const ADGameDescription gameDescriptions[] = {
 			{"generic.svl", 0, "5eb99850ada22f0b8cf6392262d4dd07", 9404599},
 			AD_LISTEND
 		},
-		Common::DE_DEU, Common::kPlatformDOS, ADGF_DEMO, GUIO0()
+		Common::DE_DEU, Common::kPlatformDOS, ADGF_DEMO, GUIO1(GUIO_NOMIDI)
 	},
 	{
 		"toon", "",
@@ -102,7 +102,17 @@ static const ADGameDescription gameDescriptions[] = {
 			{"generic.svl", 0, "5c42724bb93b360dca7044d6b7ef26e5", 7739319},
 			AD_LISTEND
 		},
-		Common::EN_ANY, Common::kPlatformDOS, ADGF_DEMO, GUIO0()
+		Common::EN_ANY, Common::kPlatformDOS, ADGF_DEMO, GUIO1(GUIO_NOMIDI)
+	},
+	{
+		// English 2-CD "Sold out" release
+		"toon", "",
+		{
+			{"local.pak", 0, "3290209ef9bc92692108dd2f45df0736", 3237611},
+			{"generic.svl", 0, "331eead1d20af7ee809a9e2f35b8362f", 6945180},
+			AD_LISTEND
+		},
+		Common::EN_ANY, Common::kPlatformDOS, ADGF_NO_FLAGS, GUIO1(GUIO_NOMIDI)
 	},
 
 	AD_TABLE_END_MARKER
@@ -127,17 +137,17 @@ static const char * const directoryGlobs[] = {
 class ToonMetaEngine : public AdvancedMetaEngine {
 public:
 	ToonMetaEngine() : AdvancedMetaEngine(Toon::gameDescriptions, sizeof(ADGameDescription), toonGames) {
-		_singleid = "toon";
+		_singleId = "toon";
 		_maxScanDepth = 3;
 		_directoryGlobs = directoryGlobs;
 	}
 
-	virtual const ADGameDescription *fallbackDetect(const FileMap &allFiles, const Common::FSList &fslist) const {
+	ADDetectedGame fallbackDetect(const FileMap &allFiles, const Common::FSList &fslist) const override {
 		return detectGameFilebased(allFiles, fslist, Toon::fileBasedFallback);
 	}
 
 	virtual const char *getName() const {
-		return "Toon";
+		return "Toonstruck";
 	}
 
 	virtual const char *getOriginalCopyright() const {
@@ -159,7 +169,9 @@ bool ToonMetaEngine::hasFeature(MetaEngineFeature f) const {
 	    (f == kSupportsDeleteSave) ||
 	    (f == kSavesSupportMetaInfo) ||
 	    (f == kSavesSupportThumbnail) ||
-	    (f == kSavesSupportCreationDate);
+	    (f == kSavesSupportCreationDate) ||
+	    (f == kSavesSupportPlayTime) ||
+		(f == kSimpleSavesNames);
 }
 
 void ToonMetaEngine::removeSaveState(const char *target, int slot) const {
@@ -167,27 +179,26 @@ void ToonMetaEngine::removeSaveState(const char *target, int slot) const {
 	g_system->getSavefileManager()->removeSavefile(fileName);
 }
 
-int ToonMetaEngine::getMaximumSaveSlot() const { return 99; }
+int ToonMetaEngine::getMaximumSaveSlot() const { return MAX_SAVE_SLOT; }
 
 SaveStateList ToonMetaEngine::listSaves(const char *target) const {
 	Common::SaveFileManager *saveFileMan = g_system->getSavefileManager();
 	Common::StringArray filenames;
 	Common::String pattern = target;
-	pattern += ".???";
+	pattern += ".###";
 
 	filenames = saveFileMan->listSavefiles(pattern);
-	sort(filenames.begin(), filenames.end());   // Sort (hopefully ensuring we are sorted numerically..)
 
 	SaveStateList saveList;
 	for (Common::StringArray::const_iterator filename = filenames.begin(); filename != filenames.end(); ++filename) {
 		// Obtain the last 3 digits of the filename, since they correspond to the save slot
 		int slotNum = atoi(filename->c_str() + filename->size() - 3);
 
-		if (slotNum >= 0 && slotNum <= 99) {
+		if (slotNum >= 0 && slotNum <= MAX_SAVE_SLOT) {
 			Common::InSaveFile *file = saveFileMan->openForLoading(*filename);
 			if (file) {
 				int32 version = file->readSint32BE();
-				if (version != TOON_SAVEGAME_VERSION) {
+				if ( (version < 4) || (version > TOON_SAVEGAME_VERSION) ) {
 					delete file;
 					continue;
 				}
@@ -208,6 +219,8 @@ SaveStateList ToonMetaEngine::listSaves(const char *target) const {
 		}
 	}
 
+	// Sort saves based on slot number.
+	Common::sort(saveList.begin(), saveList.end(), SaveStateDescriptorSlotComparator());
 	return saveList;
 }
 
@@ -218,7 +231,7 @@ SaveStateDescriptor ToonMetaEngine::querySaveMetaInfos(const char *target, int s
 	if (file) {
 
 		int32 version = file->readSint32BE();
-		if (version != TOON_SAVEGAME_VERSION) {
+		if ( (version < 4) || (version > TOON_SAVEGAME_VERSION) ) {
 			delete file;
 			return SaveStateDescriptor();
 		}
@@ -230,7 +243,11 @@ SaveStateDescriptor ToonMetaEngine::querySaveMetaInfos(const char *target, int s
 
 		SaveStateDescriptor desc(slot, saveName);
 
-		Graphics::Surface *const thumbnail = Graphics::loadThumbnail(*file);
+		Graphics::Surface *thumbnail = nullptr;
+		if (!Graphics::loadThumbnail(*file, thumbnail, false)) {
+			delete file;
+			return SaveStateDescriptor();
+		}
 		desc.setThumbnail(thumbnail);
 
 		uint32 saveDate = file->readUint32BE();
@@ -246,6 +263,11 @@ SaveStateDescriptor ToonMetaEngine::querySaveMetaInfos(const char *target, int s
 		int minutes = saveTime & 0xFF;
 
 		desc.setSaveTime(hour, minutes);
+
+		if (version >= 5) {
+			uint32 playTimeMsec = file->readUint32BE();
+			desc.setPlayTime(playTimeMsec);
+		}
 
 		delete file;
 		return desc;

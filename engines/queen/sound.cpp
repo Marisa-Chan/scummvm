@@ -35,10 +35,10 @@
 
 #include "audio/audiostream.h"
 #include "audio/decoders/flac.h"
-#include "audio/mididrv.h"
 #include "audio/decoders/mp3.h"
 #include "audio/decoders/raw.h"
 #include "audio/decoders/vorbis.h"
+#include "audio/mods/rjp1.h"
 
 #define	SB_HEADER_SIZE_V104 110
 #define	SB_HEADER_SIZE_V110 122
@@ -289,7 +289,9 @@ void PCSound::playSound(const char *base, bool isSpeech) {
 	}
 	strcat(name, ".SB");
 	if (isSpeech) {
-		while (_mixer->isSoundHandleActive(_speechHandle)) {
+		// Add _vm->shouldQuit() check here, otherwise game gets stuck
+		// in an infinite loop if we try to quit while a sound is playing...
+		while (_mixer->isSoundHandleActive(_speechHandle) && !_vm->shouldQuit()) {
 			_vm->input()->delay(10);
 		}
 	} else {

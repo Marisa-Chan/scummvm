@@ -34,29 +34,39 @@ namespace Access {
 AccessEngine::AccessEngine(OSystem *syst, const AccessGameDescription *gameDesc)
 	: _gameDescription(gameDesc), Engine(syst), _randomSource("Access"),
 	  _useItem(_flags[99]), _startup(_flags[170]), _manScaleOff(_flags[172]) {
+	// Set up debug channels
+	DebugMan.addDebugChannel(kDebugPath, "path", "Pathfinding debug level");
+	DebugMan.addDebugChannel(kDebugScripts, "scripts", "Game scripts");
+	DebugMan.addDebugChannel(kDebugGraphics, "graphics", "Graphics handling");
+	DebugMan.addDebugChannel(kDebugSound, "sound", "Sound and Music handling");
+
+	_aboutBox = nullptr;
 	_animation = nullptr;
 	_bubbleBox = nullptr;
 	_char = nullptr;
 	_debugger = nullptr;
 	_events = nullptr;
 	_files = nullptr;
+	_invBox = nullptr;
 	_inventory = nullptr;
+	_helpBox = nullptr;
 	_midi = nullptr;
 	_player = nullptr;
+	_res = nullptr;
 	_room = nullptr;
 	_screen = nullptr;
 	_scripts = nullptr;
 	_sound = nullptr;
+	_travelBox = nullptr;
 	_video = nullptr;
 
 	_destIn = nullptr;
 	_current = nullptr;
 	_mouseMode = 0;
+	_playerDataCount = 0;
 	_currentMan = 0;
 	_currentManOld = -1;
 	_converseMode = 0;
-	_startAboutBox = 0;
-	_startTravelBox = 0;
 	_numAnimTimers = 0;
 	_startup = 0;
 	_currentCharFlag = false;
@@ -97,11 +107,33 @@ AccessEngine::AccessEngine(OSystem *syst, const AccessGameDescription *gameDesc)
 	for (int i = 0; i < 100; i++)
 		_objectsTable[i] = nullptr;
 	_clearSummaryFlag = false;
+
+	for (int i = 0; i < 60; i++)
+		_travel[i] = 0;
+	_startTravelItem = _startTravelBox = 0;
+	for (int i = 0; i < 33; i++)
+		_ask[i] = 0;
+	_startAboutItem = _startAboutBox = 0;
+	_byte26CB5 = 0;
+	_bcnt = 0;
+	_boxDataStart = 0;
+	_boxDataEnd = false;
+	_boxSelectY = 0;
+	_boxSelectYOld = -1;
+	_numLines = 0;
+	_tempList = nullptr;
+	_pictureTaken = 0;
+
+	_vidEnd = false;
 }
 
 AccessEngine::~AccessEngine() {
 	delete _animation;
 	delete _bubbleBox;
+	delete _helpBox;
+	delete _travelBox;
+	delete _invBox;
+	delete _aboutBox;
 	delete _char;
 	delete _debugger;
 	delete _events;
@@ -109,6 +141,7 @@ AccessEngine::~AccessEngine() {
 	delete _inventory;
 	delete _midi;
 	delete _player;
+	delete _res;
 	delete _room;
 	delete _screen;
 	delete _scripts;
@@ -120,16 +153,10 @@ AccessEngine::~AccessEngine() {
 }
 
 void AccessEngine::setVGA() {
-	initGraphics(320, 200, false);
+	initGraphics(320, 200);
 }
 
 void AccessEngine::initialize() {
-	// Set up debug channels
-	DebugMan.addDebugChannel(kDebugPath, "Path", "Pathfinding debug level");
-	DebugMan.addDebugChannel(kDebugScripts, "scripts", "Game scripts");
-	DebugMan.addDebugChannel(kDebugGraphics, "graphics", "Graphics handling");
-	DebugMan.addDebugChannel(kDebugSound, "sound", "Sound and Music handling");
-
 	if (isCD()) {
 		const Common::FSNode gameDataDir(ConfMan.get("path"));
 		// The CD version contains two versions of the game.
@@ -147,7 +174,18 @@ void AccessEngine::initialize() {
 
 	// Create sub-objects of the engine
 	_animation = new AnimationManager(this);
-	_bubbleBox = new BubbleBox(this);
+	_bubbleBox = new BubbleBox(this, TYPE_2, 64, 32, 130, 122, 0, 0, 0, 0, "");
+	if (getGameID() == GType_MartianMemorandum) {
+		_helpBox = new BubbleBox(this, TYPE_1, 64, 24, 146, 122, 1, 32, 2, 76, "HELP");
+		_travelBox = new BubbleBox(this, TYPE_1, 64, 32, 194, 122, 1, 24, 2, 74, "TRAVEL");
+		_invBox = new BubbleBox(this, TYPE_1, 64, 32, 146, 122, 1, 32, 2, 76, "INVENTORY");
+		_aboutBox = new BubbleBox(this, TYPE_1, 64, 32, 194, 122, 1, 32, 2, 76, "ASK ABOUT");
+	} else {
+		_helpBox = nullptr;
+		_travelBox = nullptr;
+		_invBox = nullptr;
+		_aboutBox = nullptr;
+	}
 	_char = new CharManager(this);
 	_debugger = Debugger::init(this);
 	_events = new EventsManager(this);
@@ -172,6 +210,13 @@ void AccessEngine::initialize() {
 }
 
 Common::Error AccessEngine::run() {
+	_res = Resources::init(this);
+	Common::String errorMessage;
+	if (!_res->load(errorMessage)) {
+		GUIErrorMessage(errorMessage);
+		return Common::kNoError;
+	}
+
 	setVGA();
 	initialize();
 
@@ -199,7 +244,7 @@ void AccessEngine::freeCells() {
 	}
 }
 
-void AccessEngine::speakText(ASurface *s, const Common::String &msg) {
+void AccessEngine::speakText(BaseSurface *s, const Common::String &msg) {
 	Common::String lines = msg;
 	Common::String line;
 	int curPage = 0;
@@ -210,15 +255,15 @@ void AccessEngine::speakText(ASurface *s, const Common::String &msg) {
 		_events->zeroKeys();
 
 		int width = 0;
-		bool lastLine = _fonts._font2.getLine(lines, s->_maxChars * 6, line, width);
+		bool lastLine = _fonts._font2->getLine(lines, s->_maxChars * 6, line, width);
 
 		// Set font colors
-		_fonts._font2._fontColors[0] = 0;
-		_fonts._font2._fontColors[1] = 28;
-		_fonts._font2._fontColors[2] = 29;
-		_fonts._font2._fontColors[3] = 30;
+		Font::_fontColors[0] = 0;
+		Font::_fontColors[1] = 28;
+		Font::_fontColors[2] = 29;
+		Font::_fontColors[3] = 30;
 
-		_fonts._font2.drawString(s, line, s->_printOrg);
+		_fonts._font2->drawString(s, line, s->_printOrg);
 		s->_printOrg = Common::Point(s->_printStart.x, s->_printOrg.y + 9);
 
 		if ((s->_printOrg.y > _printEnd) && (!lastLine)) {
@@ -280,20 +325,20 @@ void AccessEngine::speakText(ASurface *s, const Common::String &msg) {
 	}
 }
 
-void AccessEngine::printText(ASurface *s, const Common::String &msg) {
+void AccessEngine::printText(BaseSurface *s, const Common::String &msg) {
 	Common::String lines = msg;
 	Common::String line;
 	int width = 0;
 
 	for (;;) {
-		bool lastLine = _fonts._font2.getLine(lines, s->_maxChars * 6, line, width);
+		bool lastLine = _fonts._font2->getLine(lines, s->_maxChars * 6, line, width);
 
 		// Set font colors
-		_fonts._font2._fontColors[0] = 0;
-		_fonts._font2._fontColors[1] = 28;
-		_fonts._font2._fontColors[2] = 29;
-		_fonts._font2._fontColors[3] = 30;
-		_fonts._font2.drawString(s, line, s->_printOrg);
+		_fonts._font2->_fontColors[0] = 0;
+		_fonts._font2->_fontColors[1] = 28;
+		_fonts._font2->_fontColors[2] = 29;
+		_fonts._font2->_fontColors[3] = 30;
+		_fonts._font2->drawString(s, line, s->_printOrg);
 
 		s->_printOrg = Common::Point(s->_printStart.x, s->_printOrg.y + 9);
 
@@ -391,20 +436,9 @@ void AccessEngine::copyBF1BF2() {
 }
 
 void AccessEngine::copyBF2Vid() {
-	const byte *srcP = (const byte *)_buffer2.getPixels();
-	byte *destP = (byte *)_screen->getBasePtr(_screen->_windowXAdd,
-		_screen->_windowYAdd + _screen->_screenYOff);
-
-	for (int yp = 0; yp < _screen->_vWindowLinesTall; ++yp) {
-		Common::copy(srcP, srcP + _screen->_vWindowBytesWide, destP);
-		srcP += _buffer2.pitch;
-		destP += _screen->pitch;
-	}
-
-	// Add dirty rect for affected area
-	Common::Rect r(_screen->_vWindowBytesWide, _screen->_vWindowLinesTall);
-	r.moveTo(_screen->_windowXAdd, _screen->_windowYAdd + _screen->_screenYOff);
-	_screen->addDirtyRect(r);
+	_screen->blitFrom(_buffer2,
+		Common::Rect(0, 0, _screen->_vWindowBytesWide, _screen->_vWindowLinesTall),
+		Common::Point(_screen->_windowXAdd, _screen->_windowYAdd));
 }
 
 void AccessEngine::playVideo(int videoNum, const Common::Point &pt) {
@@ -414,10 +448,6 @@ void AccessEngine::playVideo(int videoNum, const Common::Point &pt) {
 		_video->playVideo();
 		_events->pollEventsAndWait();
 	}
-}
-
-void AccessEngine::doLoadSave() {
-	error("TODO: doLoadSave");
 }
 
 void AccessEngine::freeChar() {
@@ -457,11 +487,6 @@ Common::Error AccessEngine::loadGameState(int slot) {
 	AccessSavegameHeader header;
 	if (!readSavegameHeader(saveFile, header))
 		error("Invalid savegame");
-
-	if (header._thumbnail) {
-		header._thumbnail->free();
-		delete header._thumbnail;
-	}
 
 	// Load most of the savegame data
 	synchronize(s);
@@ -507,9 +532,8 @@ void AccessEngine::synchronize(Common::Serializer &s) {
 const char *const SAVEGAME_STR = "ACCESS";
 #define SAVEGAME_STR_SIZE 6
 
-bool AccessEngine::readSavegameHeader(Common::InSaveFile *in, AccessSavegameHeader &header) {
+WARN_UNUSED_RESULT bool AccessEngine::readSavegameHeader(Common::InSaveFile *in, AccessSavegameHeader &header, bool skipThumbnail) {
 	char saveIdentBuffer[SAVEGAME_STR_SIZE + 1];
-	header._thumbnail = nullptr;
 
 	// Validate the header Id
 	in->read(saveIdentBuffer, SAVEGAME_STR_SIZE + 1);
@@ -527,9 +551,9 @@ bool AccessEngine::readSavegameHeader(Common::InSaveFile *in, AccessSavegameHead
 		header._saveName += ch;
 
 	// Get the thumbnail
-	header._thumbnail = Graphics::loadThumbnail(*in);
-	if (!header._thumbnail)
+	if (!Graphics::loadThumbnail(*in, header._thumbnail, skipThumbnail)) {
 		return false;
+	}
 
 	// Read in save date/time
 	header._year = in->readSint16LE();
@@ -570,6 +594,36 @@ void AccessEngine::writeSavegameHeader(Common::OutSaveFile *out, AccessSavegameH
 	out->writeSint16LE(td.tm_hour);
 	out->writeSint16LE(td.tm_min);
 	out->writeUint32LE(_events->getFrameCounter());
+}
+
+void AccessEngine::SPRINTCHR(char c, int fontNum) {
+	warning("TODO: SPRINTCHR");
+	_fonts._font1->drawChar(_screen, c, _screen->_printOrg);
+}
+
+void AccessEngine::PRINTCHR(Common::String msg, int fontNum) {
+	_events->hideCursor();
+	warning("TODO: PRINTCHR - Handle fontNum");
+
+	for (int i = 0; msg[i]; i++) {
+		if (!(_fonts._charSet._hi & 8)) {
+			_fonts._font1->drawChar(_screen, msg[i], _screen->_printOrg);
+			continue;
+		} else if (_fonts._charSet._hi & 2) {
+			Common::Point oldPos = _screen->_printOrg;
+			int oldFontLo = _fonts._charFor._lo;
+
+			_fonts._charFor._lo = 0;
+			_screen->_printOrg.x++;
+			_screen->_printOrg.y++;
+			SPRINTCHR(msg[i], fontNum);
+
+			_screen->_printOrg = oldPos;
+			_fonts._charFor._lo = oldFontLo;
+		}
+		SPRINTCHR(msg[i], fontNum);
+	}
+	_events->showCursor();
 }
 
 bool AccessEngine::shouldQuitOrRestart() {

@@ -11,12 +11,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -25,6 +25,8 @@
 
 #include "common/events.h"
 #include "common/system.h"
+
+#include "gui/gui-manager.h"
 
 #include "pegasus/cursor.h"
 #include "pegasus/input.h"
@@ -148,6 +150,7 @@ void InputDeviceManager::getInput(Input &input, const InputBits filter) {
 
 	// Set the console to be requested or not
 	input.setConsoleRequested(_consoleRequested);
+	_consoleRequested = false;
 
 	// WORKAROUND: The original had this in currentBits, but then
 	// pressing alt would count as an event (and mess up someone
@@ -172,10 +175,44 @@ void InputDeviceManager::waitInput(const InputBits filter) {
 	}
 }
 
+uint InputDeviceManager::convertJoystickToKey(uint joybutton) {
+	switch (joybutton) {
+	case Common::JOYSTICK_BUTTON_A:
+		return Common::KEYCODE_RETURN; // Action
+	case Common::JOYSTICK_BUTTON_B:
+		// nothing
+		break;
+	case Common::JOYSTICK_BUTTON_X:
+		return Common::KEYCODE_i; // Display Object Info
+	case Common::JOYSTICK_BUTTON_Y:
+		return Common::KEYCODE_t; // Toggle Data Display
+	case Common::JOYSTICK_BUTTON_LEFT_SHOULDER:
+		return Common::KEYCODE_TILDE; // Open Inventory Panel
+	case Common::JOYSTICK_BUTTON_RIGHT_SHOULDER:
+		return Common::KEYCODE_KP_MULTIPLY; // Open Biochip Panel
+	case Common::JOYSTICK_BUTTON_BACK:
+		return Common::KEYCODE_p; // Pause
+	case Common::JOYSTICK_BUTTON_DPAD_UP:
+		return Common::KEYCODE_UP;
+	case Common::JOYSTICK_BUTTON_DPAD_DOWN:
+		return Common::KEYCODE_DOWN;
+	case Common::JOYSTICK_BUTTON_DPAD_LEFT:
+		return Common::KEYCODE_LEFT;
+	case Common::JOYSTICK_BUTTON_DPAD_RIGHT:
+		return Common::KEYCODE_RIGHT;
+	}
+	return 0;
+}
+
 bool InputDeviceManager::notifyEvent(const Common::Event &event) {
+	if (GUI::GuiManager::instance().isActive()) {
+		// For some reason, the engine hooks in the event system using an EventObserver.
+		// So we need to explicitly ignore events that happen while ScummVM's GUI is open.
+		return false;
+	}
+
 	// We're mapping from ScummVM events to pegasus events, which
 	// are based on pippin events.
-	_consoleRequested = false;
 
 	switch (event.type) {
 	case Common::EVENT_KEYDOWN:
@@ -207,6 +244,16 @@ bool InputDeviceManager::notifyEvent(const Common::Event &event) {
 		if (_keyMap.contains(event.kbd.keycode))
 			_keyMap[event.kbd.keycode] = false;
 		break;
+	case Common::EVENT_JOYAXIS_MOTION:
+		break;
+	case Common::EVENT_JOYBUTTON_DOWN:
+		if (_keyMap.contains(convertJoystickToKey(event.joystick.button)))
+			_keyMap[convertJoystickToKey(event.joystick.button)] = true;
+		break;
+	case Common::EVENT_JOYBUTTON_UP:
+		if (_keyMap.contains(convertJoystickToKey(event.joystick.button)))
+			_keyMap[convertJoystickToKey(event.joystick.button)] = false;
+		break;
 	default:
 		break;
 	}
@@ -215,10 +262,18 @@ bool InputDeviceManager::notifyEvent(const Common::Event &event) {
 }
 
 void InputDeviceManager::pumpEvents() {
+	PegasusEngine *vm = ((PegasusEngine *)g_engine);
+
+	bool saveAllowed = vm->swapSaveAllowed(false);
+	bool openAllowed = vm->swapLoadAllowed(false);
+
 	// Just poll for events. notifyEvent() will pick up on them.
 	Common::Event event;
 	while (g_system->getEventManager()->pollEvent(event))
 		;
+
+	vm->swapSaveAllowed(saveAllowed);
+	vm->swapLoadAllowed(openAllowed);
 }
 
 int operator==(const Input &arg1, const Input &arg2) {

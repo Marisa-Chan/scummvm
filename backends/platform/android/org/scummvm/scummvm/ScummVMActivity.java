@@ -1,27 +1,44 @@
 package org.scummvm.scummvm;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.media.AudioManager;
+import android.net.Uri;
+import android.net.wifi.WifiManager;
+import android.net.wifi.WifiInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.text.ClipboardManager;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.View;
 import android.view.SurfaceView;
 import android.view.SurfaceHolder;
 import android.view.MotionEvent;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.List;
 
 public class ScummVMActivity extends Activity {
 
 	/* Establish whether the hover events are available */
 	private static boolean _hoverAvailable;
+
+	private ClipboardManager _clipboard;
+
+	/**
+	* Id to identify an external storage read request.
+	*/
+	private static final int MY_PERMISSIONS_REQUEST_READ_EXT_STORAGE = 100; // is an app-defined int constant. The callback method gets the result of the request.
 
 	static {
 		try {
@@ -32,31 +49,21 @@ public class ScummVMActivity extends Activity {
 		}
 	}
 
-	private class MyScummVM extends ScummVM {
-		private boolean usingSmallScreen() {
-			// Multiple screen sizes came in with Android 1.6.  Have
-			// to use reflection in order to continue supporting 1.5
-			// devices :(
-			DisplayMetrics metrics = new DisplayMetrics();
-			getWindowManager().getDefaultDisplay().getMetrics(metrics);
-
-			try {
-				// This 'density' term is very confusing.
-				int DENSITY_LOW = metrics.getClass().getField("DENSITY_LOW").getInt(null);
-				int densityDpi = metrics.getClass().getField("densityDpi").getInt(metrics);
-				return densityDpi <= DENSITY_LOW;
-			} catch (Exception e) {
-				return false;
-			}
+	public View.OnClickListener keyboardBtnOnClickListener = new View.OnClickListener() {
+		@Override
+		public void onClick(View v) {
+			runOnUiThread(new Runnable() {
+					public void run() {
+						toggleKeyboard();
+					}
+				});
 		}
+	};
 
+
+	private class MyScummVM extends ScummVM {
 		public MyScummVM(SurfaceHolder holder) {
 			super(ScummVMActivity.this.getAssets(), holder);
-
-			// Enable ScummVM zoning on 'small' screens.
-			// FIXME make this optional for the user
-			// disabled for now since it crops too much
-			//enableZoning(usingSmallScreen());
 		}
 
 		@Override
@@ -72,6 +79,57 @@ public class ScummVMActivity extends Activity {
 		protected void displayMessageOnOSD(String msg) {
 			Log.i(LOG_TAG, "OSD: " + msg);
 			Toast.makeText(ScummVMActivity.this, msg, Toast.LENGTH_LONG).show();
+		}
+
+		@Override
+		protected void openUrl(String url) {
+			startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+		}
+
+		@Override
+		protected boolean hasTextInClipboard() {
+			return _clipboard.hasText();
+		}
+
+		@Override
+		protected byte[] getTextFromClipboard() {
+			CharSequence text = _clipboard.getText();
+			if (text != null) {
+				String encoding = getCurrentCharset();
+				byte[] out;
+				Log.d(LOG_TAG, String.format("Converting from UTF-8 to %s", encoding));
+				try {
+					out = text.toString().getBytes(encoding);
+				} catch (java.io.UnsupportedEncodingException e) {
+					out = text.toString().getBytes();
+				}
+				return out;
+			}
+			return null;
+		}
+
+		@Override
+		protected boolean setTextInClipboard(byte[] text) {
+			String encoding = getCurrentCharset();
+			String out;
+			Log.d(LOG_TAG, String.format("Converting from %s to UTF-8", encoding));
+			try {
+				out = new String(text, encoding);
+			} catch (java.io.UnsupportedEncodingException e) {
+				out = new String(text);
+			}
+			_clipboard.setText(out);
+			return true;
+		}
+
+		@Override
+		protected boolean isConnectionLimited() {
+			WifiManager wifiMgr = (WifiManager)getSystemService(Context.WIFI_SERVICE);
+			if (wifiMgr != null && wifiMgr.isWifiEnabled()) {
+				WifiInfo wifiInfo = wifiMgr.getConnectionInfo();
+				return (wifiInfo == null || wifiInfo.getNetworkId() == -1); //WiFi is on, but it's not connected to any network
+			}
+			return true;
 		}
 
 		@Override
@@ -93,8 +151,29 @@ public class ScummVMActivity extends Activity {
 		}
 
 		@Override
+		protected void showKeyboardControl(final boolean enable) {
+			runOnUiThread(new Runnable() {
+					public void run() {
+						showKeyboardView(enable);
+					}
+				});
+		}
+
+		@Override
 		protected String[] getSysArchives() {
 			return new String[0];
+		}
+
+		@Override
+		protected String[] getAllStorageLocations() {
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+			    && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+			) {
+				requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_READ_EXT_STORAGE);
+			} else {
+				return _externalStorage.getAllStorageLocations().toArray(new String[0]);
+			}
+			return new String[0]; // an array of zero length
 		}
 
 	}
@@ -103,6 +182,7 @@ public class ScummVMActivity extends Activity {
 	private ScummVMEvents _events;
 	private MouseHelper _mouseHelper;
 	private Thread _scummvm_thread;
+	private ExternalStorage _externalStorage;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -112,6 +192,12 @@ public class ScummVMActivity extends Activity {
 
 		setContentView(R.layout.main);
 		takeKeyEvents(true);
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+			&& checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+		) {
+			requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_READ_EXT_STORAGE);
+		}
 
 		// This is a common enough error that we should warn about it
 		// explicitly.
@@ -148,6 +234,8 @@ public class ScummVMActivity extends Activity {
 			savePath = getDir("saves", MODE_WORLD_READABLE).getPath();
 		}
 
+		_clipboard = (ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+
 		// Start ScummVM
 		_scummvm = new MyScummVM(main_surface.getHolder());
 
@@ -172,6 +260,9 @@ public class ScummVMActivity extends Activity {
 		{
 			_events = new ScummVMEventsHoneycomb(this, _scummvm, _mouseHelper);
 		}
+
+		// On screen button listener
+		((ImageView)findViewById(R.id.show_keyboard)).setOnClickListener(keyboardBtnOnClickListener);
 
 		main_surface.setOnKeyListener(_events);
 		main_surface.setOnTouchListener(_events);
@@ -236,6 +327,28 @@ public class ScummVMActivity extends Activity {
 		}
 	}
 
+
+	@Override
+	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+		switch (requestCode) {
+		case MY_PERMISSIONS_REQUEST_READ_EXT_STORAGE:
+			// If request is cancelled, the result arrays are empty.
+			if (grantResults.length > 0
+			   && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+				// permission was granted
+				Log.i(ScummVM.LOG_TAG, "Read External Storage permission was granted at Runtime");
+			} else {
+				// permission denied! We won't be able to make use of functionality depending on this permission.
+				Toast.makeText(this, "Until permission is granted, some storage locations may be inaccessible!", Toast.LENGTH_SHORT)
+				              .show();
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+
 	@Override
 	public boolean onTrackballEvent(MotionEvent e) {
 		if (_events != null)
@@ -262,6 +375,25 @@ public class ScummVMActivity extends Activity {
 		else
 			imm.hideSoftInputFromWindow(main_surface.getWindowToken(),
 										InputMethodManager.HIDE_IMPLICIT_ONLY);
+	}
+
+	private void toggleKeyboard() {
+		SurfaceView main_surface = (SurfaceView)findViewById(R.id.main_surface);
+		InputMethodManager imm = (InputMethodManager)
+			getSystemService(INPUT_METHOD_SERVICE);
+
+		imm.toggleSoftInputFromWindow(main_surface.getWindowToken(),
+		                              InputMethodManager.SHOW_IMPLICIT,
+		                              InputMethodManager.HIDE_IMPLICIT_ONLY);
+	}
+
+	private void showKeyboardView(boolean show) {
+		ImageView keyboardBtn = (ImageView)findViewById(R.id.show_keyboard);
+
+		if (show)
+			keyboardBtn.setVisibility(View.VISIBLE);
+		else
+			keyboardBtn.setVisibility(View.GONE);
 	}
 
 	private void showMouseCursor(boolean show) {

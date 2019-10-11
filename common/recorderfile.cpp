@@ -335,7 +335,7 @@ RecorderEvent PlaybackFile::getNextEvent() {
 			case kScreenShotTag:
 				_readStream->seek(-4, SEEK_CUR);
 				header.len = _readStream->readUint32BE();
-				_readStream->skip(header.len-8);
+				_readStream->skip(header.len - 8);
 				break;
 			case kMD5Tag:
 				checkRecordedMD5();
@@ -361,6 +361,8 @@ void PlaybackFile::readEvent(RecorderEvent& event) {
 	case kRecorderEventTypeTimer:
 		event.time = _tmpPlaybackFile.readUint32LE();
 		break;
+	default:
+		// fallthrough intended
 	case kRecorderEventTypeNormal:
 		event.type = (EventType)_tmpPlaybackFile.readUint32LE();
 		switch (event.type) {
@@ -390,7 +392,7 @@ void PlaybackFile::readEvent(RecorderEvent& event) {
 		}
 		break;
 	}
-	event.synthetic = true;
+	event.kbdRepeat = true;
 }
 
 void PlaybackFile::readEventsToBuffer(uint32 size) {
@@ -514,6 +516,8 @@ void PlaybackFile::writeEvent(const RecorderEvent &event) {
 	case kRecorderEventTypeTimer:
 		_tmpRecordFile.writeUint32LE(event.time);
 		break;
+	default:
+		// fallthrough intended
 	case kRecorderEventTypeNormal:
 		_tmpRecordFile.writeUint32LE((uint32)event.type);
 		switch(event.type) {
@@ -575,7 +579,7 @@ int PlaybackFile::getScreensCount() {
 	int result = 0;
 	while (skipToNextScreenshot()) {
 		uint32 size = _readStream->readUint32BE();
-		_readStream->skip(size-8);
+		_readStream->skip(size - 8);
 		++result;
 	}
 	return result;
@@ -608,10 +612,11 @@ Graphics::Surface *PlaybackFile::getScreenShot(int number) {
 		if (screenCount == number) {
 			screenCount++;
 			_readStream->seek(-4, SEEK_CUR);
-			return Graphics::loadThumbnail(*_readStream);
+			Graphics::Surface *thumbnail;
+			return Graphics::loadThumbnail(*_readStream, thumbnail) ? thumbnail : NULL;
 		} else {
 			uint32 size = _readStream->readUint32BE();
-			_readStream->skip(size-8);
+			_readStream->skip(size - 8);
 			screenCount++;
 		}
 	}

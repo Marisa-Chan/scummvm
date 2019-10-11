@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -39,10 +39,10 @@ namespace ZVision {
 
 InputControl::InputControl(ZVision *engine, uint32 key, Common::SeekableReadStream &stream)
 	: Control(engine, key, CONTROL_INPUT),
+	  _background(0),
 	  _nextTabstop(0),
 	  _focused(false),
 	  _textChanged(false),
-	  _cursorOffset(0),
 	  _enterPressed(false),
 	  _readOnly(false),
 	  _txtWidth(0),
@@ -78,13 +78,13 @@ InputControl::InputControl(ZVision *engine, uint32 key, Common::SeekableReadStre
 
 			sscanf(values.c_str(), "%u", &fontFormatNumber);
 
-			_stringInit.readAllStyle(_engine->getStringManager()->getTextLine(fontFormatNumber));
+			_stringInit.readAllStyles(_engine->getStringManager()->getTextLine(fontFormatNumber));
 		} else if (param.matchString("chooser_init_string", true)) {
 			uint fontFormatNumber;
 
 			sscanf(values.c_str(), "%u", &fontFormatNumber);
 
-			_stringChooserInit.readAllStyle(_engine->getStringManager()->getTextLine(fontFormatNumber));
+			_stringChooserInit.readAllStyles(_engine->getStringManager()->getTextLine(fontFormatNumber));
 		} else if (param.matchString("next_tabstop", true)) {
 			sscanf(values.c_str(), "%u", &_nextTabstop);
 		} else if (param.matchString("cursor_dimensions", true)) {
@@ -109,6 +109,15 @@ InputControl::InputControl(ZVision *engine, uint32 key, Common::SeekableReadStre
 		_engine->getScriptManager()->trimCommentsAndWhiteSpace(&line);
 		getParams(line, param, values);
 	}
+
+	_maxTxtWidth = _textRectangle.width();
+	if (_animation)
+		_maxTxtWidth -= _animation->getWidth();
+}
+
+InputControl::~InputControl() {
+	_background->free();
+	delete _background;
 }
 
 bool InputControl::onMouseUp(const Common::Point &screenSpacePos, const Common::Point &backgroundImageSpacePos) {
@@ -191,19 +200,31 @@ bool InputControl::process(uint32 deltaTimeInMillis) {
 	if (_engine->getScriptManager()->getStateFlag(_key) & Puzzle::DISABLED)
 		return false;
 
+	if (!_background) {
+		_background = _engine->getRenderManager()->getBkgRect(_textRectangle);
+	}
+
 	// First see if we need to render the text
 	if (_textChanged) {
 		// Blit the text using the RenderManager
 
 		Graphics::Surface txt;
-		txt.create(_textRectangle.width(), _textRectangle.height(), _engine->_resourcePixelFormat);
+		txt.copyFrom(*_background);
+
+		int32 oldTxtWidth = _txtWidth;
 
 		if (!_readOnly || !_focused)
-			_txtWidth = _engine->getTextRenderer()->drawTxt(_currentInputText, _stringInit, txt);
+			_txtWidth = _engine->getTextRenderer()->drawText(_currentInputText, _stringInit, txt);
 		else
-			_txtWidth = _engine->getTextRenderer()->drawTxt(_currentInputText, _stringChooserInit, txt);
+			_txtWidth = _engine->getTextRenderer()->drawText(_currentInputText, _stringChooserInit, txt);
 
-		_engine->getRenderManager()->blitSurfaceToBkg(txt, _textRectangle.left, _textRectangle.top);
+		if (_readOnly || _txtWidth <= _maxTxtWidth)
+			_engine->getRenderManager()->blitSurfaceToBkg(txt, _textRectangle.left, _textRectangle.top);
+		else {
+			// Assume the last character caused the overflow.
+			_currentInputText.deleteLastChar();
+			_txtWidth = oldTxtWidth;
+		}
 
 		txt.free();
 	}

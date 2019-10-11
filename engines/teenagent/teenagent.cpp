@@ -71,6 +71,13 @@ TeenAgentEngine::TeenAgentEngine(OSystem *system, const ADGameDescription *gd)
 	res = new Resources();
 
 	console = 0;
+	scene = 0;
+	inventory = 0;
+	_sceneBusy = false;
+	_dstObject = 0;
+	_musicStream = 0;
+	_markDelay = 0;
+	_gameDelay = 0;
 }
 
 TeenAgentEngine::~TeenAgentEngine() {
@@ -528,12 +535,15 @@ bool TeenAgentEngine::showMetropolis() {
 }
 
 Common::Error TeenAgentEngine::run() {
+	const Common::FSNode gameDataDir(ConfMan.get("path"));
+	SearchMan.addSubDirectoryMatching(gameDataDir, "music");
+
 	if (!res->loadArchives(_gameDescription))
 		return Common::kUnknownError;
 
 	Common::EventManager *_event = _system->getEventManager();
 
-	initGraphics(kScreenWidth, kScreenHeight, false);
+	initGraphics(kScreenWidth, kScreenHeight);
 	console = new Console(this);
 
 	scene = new Scene(this);
@@ -544,6 +554,10 @@ Common::Error TeenAgentEngine::run() {
 	CursorMan.pushCursor(res->dseg.ptr(dsAddr_cursor), 8, 12, 0, 0, 1);
 
 	syncSoundSettings();
+
+	// Initialize CD audio
+	if (_gameDescription->flags & ADGF_CD)
+		g_system->getAudioCDManager()->open();
 
 	setMusic(1);
 	_mixer->playStream(Audio::Mixer::kMusicSoundType, &_musicHandle, music, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO, false);
@@ -1018,15 +1032,15 @@ void TeenAgentEngine::wait(uint16 frames) {
 	scene->push(event);
 }
 
-void TeenAgentEngine::playSoundNow(byte id) {
-	uint size = res->sam_sam.getSize(id);
+void TeenAgentEngine::playSoundNow(Pack *pack, byte id) {
+	uint size = pack->getSize(id);
 	if (size == 0) {
 		warning("skipping invalid sound %u", id);
 		return;
 	}
 
 	byte *data = (byte *)malloc(size);
-	res->sam_sam.read(id, data, size);
+	pack->read(id, data, size);
 	debug(3, "playing %u samples...", size);
 
 	Audio::AudioStream *stream = Audio::makeRawStream(data, size, 11025, 0);

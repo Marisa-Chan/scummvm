@@ -26,11 +26,9 @@
  */
 
 #include "gui/saveload.h"
-#include "gui/about.h"
-#include "gui/message.h"
 #include "common/config-manager.h"
 #include "common/events.h"
-#include "engines/advancedDetector.h"
+#include "common/translation.h"
 #include "cge2/events.h"
 #include "cge2/text.h"
 #include "cge2/cge2_main.h"
@@ -63,7 +61,7 @@ bool Keyboard::getKey(Common::Event &event) {
 		return false;
 	case Common::KEYCODE_F5:
 		if (_vm->canSaveGameStateCurrently()) {
-			GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser("Save game:", "Save", true);
+			GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(_("Save game:"), _("Save"), true);
 			int16 savegameId = dialog->runModalWithCurrentTarget();
 			Common::String savegameDescription = dialog->getResultString();
 			delete dialog;
@@ -74,7 +72,7 @@ bool Keyboard::getKey(Common::Event &event) {
 		return false;
 	case Common::KEYCODE_F7:
 		if (_vm->canLoadGameStateCurrently()) {
-			GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser("Restore game:", "Restore", false);
+			GUI::SaveLoadChooser *dialog = new GUI::SaveLoadChooser(_("Restore game:"), _("Restore"), false);
 			int16 savegameId = dialog->runModalWithCurrentTarget();
 			delete dialog;
 
@@ -209,8 +207,15 @@ void Mouse::newMouse(Common::Event &event) {
 EventManager::EventManager(CGE2Engine *vm) : _vm(vm) {
 	_eventQueueHead = 0;
 	_eventQueueTail = 0;
-	memset(&_eventQueue, 0, kEventMax * sizeof(CGE2Event));
-	memset(&_event, 0, sizeof(Common::Event));
+	for (uint16 k = 0; k < kEventMax; k++) {
+		_eventQueue[k]._mask = 0;
+		_eventQueue[k]._x = 0;
+		_eventQueue[k]._y = 0;
+		_eventQueue[k]._spritePtr = nullptr;
+	}
+	_event.joystick.axis = 0;
+	_event.joystick.position = 0;
+	_event.joystick.button = 0;
 }
 
 void EventManager::poll() {

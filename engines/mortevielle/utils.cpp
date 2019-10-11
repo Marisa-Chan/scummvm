@@ -707,11 +707,11 @@ void MortevielleEngine::displayAloneText() {
 	Common::String sAlone = getEngineString(S_ALONE);
 
 	clearUpperRightPart();
-	_screenSurface->putxy(580 - (_screenSurface->getStringWidth(sYou) / 2), 30);
+	_screenSurface->putxy(560, 30);
 	_screenSurface->drawString(sYou, 4);
-	_screenSurface->putxy(580 - (_screenSurface->getStringWidth(sAre) / 2), 50);
+	_screenSurface->putxy(560, 50);
 	_screenSurface->drawString(sAre, 4);
-	_screenSurface->putxy(580 - (_screenSurface->getStringWidth(sAlone) / 2), 70);
+	_screenSurface->putxy(560, 70);
 	_screenSurface->drawString(sAlone, 4);
 
 	_currBitIndex = 0;
@@ -1330,7 +1330,6 @@ void MortevielleEngine::displayDiningRoom() {
  * @remarks	Originally called 'sparl'
  */
 void MortevielleEngine::startDialog(int16 rep) {
-	const int haut[9] = { 0, 0, 1, -3, 6, -2, 2, 7, -1 };
 	int key;
 
 	assert(rep >= 0);
@@ -1342,7 +1341,7 @@ void MortevielleEngine::startDialog(int16 rep) {
 
 	key = 0;
 	do {
-		_soundManager->startSpeech(rep, haut[_caff - 69], 0);
+		_soundManager->startSpeech(rep, _caff - 69, 0);
 		key = _dialogManager->waitForF3F8();
 		if (shouldQuit())
 			return;
@@ -1695,7 +1694,7 @@ void MortevielleEngine::clearUpperRightPart() {
 	else if (_coreVar._faithScore > 65)
 		st = getEngineString(S_MALSAINE);
 
-	int x1 = 580 - (_screenSurface->getStringWidth(st) / 2);
+	int x1 = 574 - (_screenSurface->getStringWidth(st) / 2);
 	_screenSurface->putxy(x1, 92);
 	_screenSurface->drawString(st, 4);
 
@@ -1726,6 +1725,22 @@ void MortevielleEngine::showMoveMenuAlert() {
  * @remarks	Originally called 'dialpre'
  */
 void MortevielleEngine::showConfigScreen() {
+	// FIXME: need a DOS palette, index 9 (light blue). Also we should show DOS font here
+	Common::String tmpStr;
+	int cy = 0;
+	clearScreen();
+ 	do {
+ 		++cy;
+ 		tmpStr = getString(cy + kStartingScreenStringIndex);
+ 		int width = _screenSurface->getStringWidth(tmpStr);
+ 		_text->displayStr(tmpStr, 320 - width / 2, cy * 8, 80, 1, 2);
+ 	} while (cy != 20);
+
+ 	int ix = 0;
+ 	do {
+ 		++ix;
+ 	} while (!(keyPressed() || ix == 0x5e5));
+
 	_crep = 998;
 }
 
@@ -2099,8 +2114,12 @@ void MortevielleEngine::music() {
 	_reloadCFIEC = true;
 
 	Common::File f;
-	if (!f.open("mort.img"))
-		error("Missing file - mort.img");
+	if (!f.open("mort.img")) {
+		// Some DOS versions use MORTP2 instead of MORT.IMG
+		// Some have both and they are identical
+		if (!f.open("mortp2"))
+			error("Missing file - mort.img");
+	}
 
 	int size = f.size();
 	byte *compMusicBuf = (byte *)malloc(sizeof(byte) * size);
@@ -2132,6 +2151,7 @@ void MortevielleEngine::showTitleScreen() {
 	clearScreen();
 	draw(0, 0);
 
+	// FIXME: should be a DOS font here
 	Common::String cpr = "COPYRIGHT 1989 : LANKHOR";
 	_screenSurface->putxy(104 + 72 * kResolutionScaler, 185);
 	_screenSurface->drawString(cpr, 0);
@@ -2470,7 +2490,7 @@ int MortevielleEngine::getAnimOffset(int frameNum, int animNum) {
  */
 void MortevielleEngine::displayTextInDescriptionBar(int x, int y, int nb, int mesgId) {
 	Common::String tmpStr = getString(mesgId);
-	if ((y == 182) && ((int) tmpStr.size() > nb))
+	if ((y == 182) && ((int)tmpStr.size() > nb))
 		y = 176;
 	_text->displayStr(tmpStr, x, y, nb, 20, _textColor);
 }
@@ -2483,7 +2503,7 @@ void MortevielleEngine::handleDescriptionText(int f, int mesgId) {
 	if ((mesgId > 499) && (mesgId < 563)) {
 		Common::String tmpStr = getString(mesgId - 501 + kInventoryStringIndex);
 
-		if ((int) tmpStr.size() > ((58 + (kResolutionScaler - 1) * 37) << 1))
+		if ((int)tmpStr.size() > ((58 + (kResolutionScaler - 1) * 37) << 1))
 			_largestClearScreen = true;
 		else
 			_largestClearScreen = false;

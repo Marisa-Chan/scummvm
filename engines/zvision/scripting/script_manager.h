@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -112,6 +112,28 @@ struct Location {
 	char view;
 	uint32 offset;
 };
+
+inline bool operator==(const Location& lhs, const Location& rhs) {
+	return (
+		lhs.world == rhs.world &&
+		lhs.room == rhs.room &&
+		lhs.node == rhs.node &&
+		lhs.view == rhs.view
+	);
+}
+
+inline bool operator==(const Location& lhs, const char* rhs) {
+	Common::String lhsStr = Common::String::format("%c%c%c%c", lhs.world, lhs.room, lhs.node, lhs.view);
+	return lhsStr == rhs;
+}
+
+inline bool operator!=(const Location& lhs, const Location& rhs) {
+	return !(lhs == rhs);
+}
+
+inline bool operator!=(const Location& lhs, const char* rhs) {
+	return !(lhs == rhs);
+}
 
 typedef Common::List<Puzzle *> PuzzleList;
 typedef Common::Queue<Puzzle *> PuzzleQueue;
@@ -312,9 +334,10 @@ private:
 	 *
 	 * @param criteria    Pointer to the Criteria object to fill
 	 * @param stream      Scr file stream
+	 * @param key         Puzzle key (for workarounds)
 	 * @return            Whether any criteria were read
 	 */
-	bool parseCriteria(Common::SeekableReadStream &stream, Common::List<Common::List<Puzzle::CriteriaEntry> > &criteriaList) const;
+	bool parseCriteria(Common::SeekableReadStream &stream, Common::List<Common::List<Puzzle::CriteriaEntry> > &criteriaList, uint32 key) const;
 
 	/**
 	 * Parses the stream into a ResultAction objects

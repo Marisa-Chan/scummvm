@@ -1,5 +1,5 @@
 /* Copyright (C) 2003, 2004, 2005, 2006, 2008, 2009 Dean Beeler, Jerome Fisher
- * Copyright (C) 2011, 2012, 2013, 2014 Dean Beeler, Jerome Fisher, Sergey V. Mikayev
+ * Copyright (C) 2011-2017 Dean Beeler, Jerome Fisher, Sergey V. Mikayev
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU Lesser General Public License as published by
@@ -18,6 +18,9 @@
 #ifndef MT32EMU_MIDI_EVENT_QUEUE_H
 #define MT32EMU_MIDI_EVENT_QUEUE_H
 
+#include "globals.h"
+#include "Types.h"
+
 namespace MT32Emu {
 
 /**
@@ -29,6 +32,7 @@ struct MidiEvent {
 	Bit32u sysexLength;
 	Bit32u timestamp;
 
+	MidiEvent();
 	~MidiEvent();
 	void setShortMessage(Bit32u shortMessageData, Bit32u timestamp);
 	void setSysex(const Bit8u *sysexData, Bit32u sysexLength, Bit32u timestamp);
@@ -60,8 +64,9 @@ public:
 	const MidiEvent *peekMidiEvent();
 	void dropMidiEvent();
 	bool isFull() const;
+	bool inline isEmpty() const;
 };
 
-}
+} // namespace MT32Emu
 
-#endif
+#endif // #ifndef MT32EMU_MIDI_EVENT_QUEUE_H

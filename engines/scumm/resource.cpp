@@ -748,7 +748,7 @@ byte *ScummEngine::getResourceAddress(ResType type, ResId idx) {
 
 	_res->setResourceCounter(type, idx, 1);
 
-	debugC(DEBUG_RESOURCE, "getResourceAddress(%s,%d) == %p", nameOfResType(type), idx, ptr);
+	debugC(DEBUG_RESOURCE, "getResourceAddress(%s,%d) == %p", nameOfResType(type), idx, (void *)ptr);
 	return ptr;
 }
 
@@ -887,7 +887,7 @@ void ResourceManager::setHeapThreshold(int min, int max) {
 
 bool ResourceManager::validateResource(const char *str, ResType type, ResId idx) const {
 	if (type < rtFirst || type > rtLast || (uint)idx >= (uint)_types[type].size()) {
-		error("%s Illegal Glob type %s (%d) num %d", str, nameOfResType(type), type, idx);
+		warning("%s Illegal Glob type %s (%d) num %d", str, nameOfResType(type), type, idx);
 		return false;
 	}
 	return true;

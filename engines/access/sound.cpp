@@ -20,20 +20,27 @@
  *
  */
 
-#include "common/algorithm.h"
+#include "common/config-manager.h"
 #include "audio/mixer.h"
+#include "audio/audiostream.h"
+#include "audio/mididrv.h"
+#include "audio/midiparser.h"
 #include "audio/decoders/raw.h"
 #include "audio/decoders/wave.h"
+// Miles Audio
+#include "audio/miles.h"
 #include "access/access.h"
 #include "access/sound.h"
 
 namespace Access {
 
 SoundManager::SoundManager(AccessEngine *vm, Audio::Mixer *mixer) : _vm(vm), _mixer(mixer) {
+	_effectsHandle = new Audio::SoundHandle();
 }
 
 SoundManager::~SoundManager() {
 	clearSounds();
+	delete _effectsHandle;
 }
 
 void SoundManager::clearSounds() {
@@ -44,16 +51,22 @@ void SoundManager::clearSounds() {
 
 	_soundTable.clear();
 
-	if (_mixer->isSoundHandleActive(_effectsHandle))
-		_mixer->stopHandle(_effectsHandle);
-
-	if (_queue.size())
-		_queue.remove_at(0);
+	if (_mixer->isSoundHandleActive(*_effectsHandle))
+		_mixer->stopHandle(*_effectsHandle);
 
 	while (_queue.size()) {
-		delete _queue[0];
+		delete _queue[0]._stream;
 		_queue.remove_at(0);
 	}
+}
+
+bool SoundManager::isSoundQueued(int soundId) const {
+	for (uint idx = 0; idx < _queue.size(); ++idx) {
+		if (_queue[idx]._soundId == soundId)
+			return true;
+	}
+
+	return false;
 }
 
 void SoundManager::loadSoundTable(int idx, int fileNum, int subfile, int priority) {
@@ -75,26 +88,29 @@ Resource *SoundManager::loadSound(int fileNum, int subfile) {
 	return _vm->_files->loadFile(fileNum, subfile);
 }
 
-void SoundManager::playSound(int soundIndex) {
-	debugC(1, kDebugSound, "playSound(%d)", soundIndex);
+void SoundManager::playSound(int soundIndex, bool loop) {
+	debugC(1, kDebugSound, "playSound(%d, %d)", soundIndex, loop);
+	if (isSoundQueued(soundIndex))
+		// Prevent duplicate copies of a sound from being queued
+		return;
 
 	int priority = _soundTable[soundIndex]._priority;
-	playSound(_soundTable[soundIndex]._res, priority);
+	playSound(_soundTable[soundIndex]._res, priority, loop, soundIndex);
 }
 
-void SoundManager::playSound(Resource *res, int priority) {
+void SoundManager::playSound(Resource *res, int priority, bool loop, int soundIndex) {
 	debugC(1, kDebugSound, "playSound");
 
 	byte *resourceData = res->data();
 
 	assert(res->_size >= 32);
 
+	Audio::RewindableAudioStream *audioStream;
+
 	if (READ_BE_UINT32(resourceData) == MKTAG('R','I','F','F')) {
 		// CD version uses WAVE-files
 		Common::SeekableReadStream *waveStream = new Common::MemoryReadStream(resourceData, res->_size, DisposeAfterUse::NO);
-		Audio::RewindableAudioStream *audioStream = Audio::makeWAVStream(waveStream, DisposeAfterUse::YES);
-		_queue.push_back(audioStream);
-
+		audioStream = Audio::makeWAVStream(waveStream, DisposeAfterUse::YES);
 	} else if (READ_BE_UINT32(resourceData) == MKTAG('S', 'T', 'E', 'V')) {
 		// sound files have a fixed header of 32 bytes in total
 		//  header content:
@@ -109,7 +125,7 @@ void SoundManager::playSound(Resource *res, int priority) {
 		byte internalSampleRate = resourceData[5];
 		int sampleSize = READ_LE_UINT16(resourceData + 7);
 
-		assert( (sampleSize + 32) == res->_size);
+		assert( (sampleSize + 32) <= res->_size);
 
 		int sampleRate = 0;
 		switch (internalSampleRate) {
@@ -134,34 +150,40 @@ void SoundManager::playSound(Resource *res, int priority) {
 			return;
 		}
 
-		Audio::RewindableAudioStream *audioStream = Audio::makeRawStream(resourceData + 32, sampleSize, sampleRate, 0, DisposeAfterUse::NO);
-		_queue.push_back(audioStream);
-
+		audioStream = Audio::makeRawStream(resourceData + 32, sampleSize, sampleRate, 0, DisposeAfterUse::NO);
 	} else
 		error("Unknown format");
 
-	if (!_mixer->isSoundHandleActive(_effectsHandle))
-		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_effectsHandle,
-						_queue[0], -1, _mixer->kMaxChannelVolume, 0,
-						DisposeAfterUse::YES);
+	if (loop) {
+		_queue.push_back(QueuedSound(new Audio::LoopingAudioStream(audioStream, 0,
+			DisposeAfterUse::NO), soundIndex));
+	} else {
+		_queue.push_back(QueuedSound(audioStream, soundIndex));
+	}
+
+	if (!_mixer->isSoundHandleActive(*_effectsHandle))
+		_mixer->playStream(Audio::Mixer::kSFXSoundType, _effectsHandle,
+						_queue[0]._stream, -1, _mixer->kMaxChannelVolume, 0,
+						DisposeAfterUse::NO);
 }
 
 void SoundManager::checkSoundQueue() {
 	debugC(5, kDebugSound, "checkSoundQueue");
 
-	if (_queue.empty() || _mixer->isSoundHandleActive(_effectsHandle))
+	if (_queue.empty() || _mixer->isSoundHandleActive(*_effectsHandle))
 		return;
 
+	delete _queue[0]._stream;
 	_queue.remove_at(0);
 
-	if (_queue.size())
-		_mixer->playStream(Audio::Mixer::kSFXSoundType, &_effectsHandle,
-		   _queue[0], -1, _mixer->kMaxChannelVolume, 0,
-		   DisposeAfterUse::YES);
+	if (_queue.size() && _queue[0]._stream)
+		_mixer->playStream(Audio::Mixer::kSFXSoundType, _effectsHandle,
+		   _queue[0]._stream, -1, _mixer->kMaxChannelVolume, 0,
+		   DisposeAfterUse::NO);
 }
 
 bool SoundManager::isSFXPlaying() {
-	return _mixer->isSoundHandleActive(_effectsHandle);
+	return _mixer->isSoundHandleActive(*_effectsHandle);
 }
 
 void SoundManager::loadSounds(Common::Array<RoomInfo::SoundIdent> &sounds) {
@@ -178,7 +200,7 @@ void SoundManager::loadSounds(Common::Array<RoomInfo::SoundIdent> &sounds) {
 void SoundManager::stopSound() {
 	debugC(3, kDebugSound, "stopSound");
 
-	_mixer->stopHandle(Audio::SoundHandle());
+	_mixer->stopHandle(*_effectsHandle);
 }
 
 void SoundManager::freeSounds() {
@@ -194,18 +216,63 @@ MusicManager::MusicManager(AccessEngine *vm) : _vm(vm) {
 	_music = nullptr;
 	_tempMusic = nullptr;
 	_isLooping = false;
+	_driver = nullptr;
+	_byte1F781 = false;
 
+	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_MT32);
+	MusicType musicType = MidiDriver::getMusicType(dev);
+
+	// Amazon Guardians of Eden uses MIDPAK inside MIDIDRV.AP
+	// AdLib patches are inside MIDIDRV.AP too, 2nd resource file
+	//
+	// Amazon Guardians of Eden (demo) seems to use another type of driver, possibly written by Access themselves
+	// Martian Memorandum uses this other type of driver as well, which means it makes sense to reverse engineer it.
+	//
+	switch (musicType) {
+	case MT_ADLIB: {
+		if (_vm->getGameID() == GType_Amazon && !_vm->isDemo()) {
+			Resource   *midiDrvResource = _vm->_files->loadFile(92, 1);
+			Common::MemoryReadStream *adLibInstrumentStream = new Common::MemoryReadStream(midiDrvResource->data(), midiDrvResource->_size);
+
+			_driver = Audio::MidiDriver_Miles_AdLib_create("", "", adLibInstrumentStream);
+
+			delete midiDrvResource;
+			delete adLibInstrumentStream;
+		} else {
+			MidiPlayer::createDriver();
+		}
+		break;
+	}
+	case MT_MT32:
+		_driver = Audio::MidiDriver_Miles_MT32_create("");
+		_nativeMT32 = true;
+		break;
+	case MT_GM:
+		if (ConfMan.getBool("native_mt32")) {
+			_driver = Audio::MidiDriver_Miles_MT32_create("");
+			_nativeMT32 = true;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+#if 0
 	MidiPlayer::createDriver();
 	MidiDriver::detectDevice(MDT_MIDI | MDT_ADLIB | MDT_PREFER_GM);
+#endif
 
-	int retValue = _driver->open();
-	if (retValue == 0) {
-		if (_nativeMT32)
-			_driver->sendMT32Reset();
-		else
-			_driver->sendGMReset();
+	if (_driver) {
+		int retValue = _driver->open();
+		if (retValue == 0) {
+			if (_nativeMT32)
+				_driver->sendMT32Reset();
+			else
+				_driver->sendGMReset();
 
-		_driver->setTimerCallback(this, &timerCallback);
+			_driver->setTimerCallback(this, &timerCallback);
+		}
 	}
 }
 
@@ -215,15 +282,22 @@ MusicManager::~MusicManager() {
 }
 
 void MusicManager::send(uint32 b) {
+	// Pass data directly to driver
+	_driver->send(b);
+#if 0
 	if ((b & 0xF0) == 0xC0 && !_nativeMT32) {
 		b = (b & 0xFFFF00FF) | MidiDriver::_mt32ToGm[(b >> 8) & 0xFF] << 8;
 	}
 
 	Audio::MidiPlayer::send(b);
+#endif
 }
 
 void MusicManager::midiPlay() {
 	debugC(1, kDebugSound, "midiPlay");
+
+	if (!_driver)
+		return;
 
 	if (_music->_size < 4) {
 		error("midiPlay() wrong music resource size");
@@ -262,6 +336,8 @@ bool MusicManager::checkMidiDone() {
 void MusicManager::midiRepeat() {
 	debugC(1, kDebugSound, "midiRepeat");
 
+	if (!_driver)
+		return;
 	if (!_parser)
 		return;
 
@@ -273,6 +349,9 @@ void MusicManager::midiRepeat() {
 
 void MusicManager::stopSong() {
 	debugC(1, kDebugSound, "stopSong");
+
+	if (!_driver)
+		return;
 
 	stop();
 }
@@ -291,6 +370,9 @@ void MusicManager::loadMusic(FileIdent file) {
 
 void MusicManager::newMusic(int musicId, int mode) {
 	debugC(1, kDebugSound, "newMusic(%d, %d)", musicId, mode);
+
+	if (!_driver)
+		return;
 
 	if (mode == 1) {
 		stopSong();

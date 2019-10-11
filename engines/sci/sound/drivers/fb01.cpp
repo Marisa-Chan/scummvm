@@ -24,10 +24,19 @@
 
 #include "sci/resource.h"
 #include "sci/sound/drivers/mididriver.h"
+#include "sci/util.h"
 
 #include "common/file.h"
 #include "common/system.h"
 #include "common/textconsole.h"
+#include "common/mutex.h"
+
+// The original driver uses the master volume setting of the hardware device by sending sysex messages
+// (applies to SCI0 and SCI1). We have a software mastervolume implementation instead. I don't know the
+// reason for this. Nor do I know whether our software effective volume calculation matches the device's
+// internal volume calculation algorithm.
+// I add the original style master volume handling, but make it optional via a #define
+#define		HARDWARE_MASTERVOLUME
 
 namespace Sci {
 
@@ -54,14 +63,19 @@ public:
 
 	int open(ResourceManager *resMan);
 	void close();
+	void initTrack(SciSpan<const byte>& header);
 	void send(uint32 b);
 	void sysEx(const byte *msg, uint16 length);
 	bool hasRhythmChannel() const { return false; }
 	byte getPlayId() const;
-	int getPolyphony() const { return kVoices; } // 9 in SCI1?
+	int getPolyphony() const { return _version <= SCI_VERSION_0_LATE ? 8 : 9; }
 	void setVolume(byte volume);
 	int getVolume();
 	void playSwitch(bool play);
+
+	bool isOpen() const { return _isOpen; }
+
+	const char *reportMissingFiles() { return _missingFiles; }
 
 private:
 	void noteOn(int channel, int note, int velocity);
@@ -71,8 +85,8 @@ private:
 
 	void setVoiceParam(byte voice, byte param, byte value);
 	void setSystemParam(byte sysChan, byte param, byte value);
-	void sendVoiceData(byte instrument, const byte *data);
-	void sendBanks(const byte *data, int size);
+	void sendVoiceData(byte instrument, const SciSpan<const byte> &data);
+	void sendBanks(const SciSpan<const byte> &data);
 	void storeVoiceData(byte instrument, byte bank, byte index);
 	void initVoices();
 
@@ -101,18 +115,22 @@ private:
 
 	struct Voice {
 		int8 channel;			// MIDI channel that this voice is assigned to or -1
+		uint8 poly;				// Number of hardware voices (SCI0); for SCI1 we just set this to 1
 		int8 note;				// Currently playing MIDI note or -1
 		int bank;				// Current bank setting or -1
 		int patch;				// Currently playing patch or -1
-		uint8 velocity;			// Note velocity
-		bool isSustained;		// Flag indicating a note that is being sustained by the hold pedal
+		//uint8 velocity;		// Note velocity
+		//bool isSustained;		// Flag indicating a note that is being sustained by the hold pedal
 		uint16 age;				// Age of the current note
 
-		Voice() : channel(-1), note(-1), bank(-1), patch(-1), velocity(0), isSustained(false), age(0) { }
+		Voice() : channel(-1), note(-1), bank(-1), patch(-1), /*velocity(0), isSustained(false),*/ age(0), poly(1) { }
 	};
 
 	bool _playSwitch;
 	int _masterVolume;
+	int _numParts;
+
+	bool _isOpen;
 
 	Channel _channels[16];
 	Voice _voices[kVoices];
@@ -122,10 +140,14 @@ private:
 	static void midiTimerCallback(void *p);
 	void setTimerCallback(void *timer_param, Common::TimerManager::TimerProc timer_proc);
 
+	const char *_missingFiles;
+	static const char _requiredFiles[2][12];
+
 	byte _sysExBuf[kMaxSysExSize];
 };
 
-MidiPlayer_Fb01::MidiPlayer_Fb01(SciVersion version) : MidiPlayer(version), _playSwitch(true), _masterVolume(15), _timerParam(NULL), _timerProc(NULL) {
+MidiPlayer_Fb01::MidiPlayer_Fb01(SciVersion version) : MidiPlayer(version), _playSwitch(true), _masterVolume(15), _timerParam(NULL), _timerProc(NULL),
+	_numParts(version > SCI_VERSION_0_LATE ? kVoices : 0), _isOpen(false), _missingFiles(0) {
 	MidiDriver::DeviceHandle dev = MidiDriver::detectDevice(MDT_MIDI);
 	_driver = MidiDriver::createMidi(dev);
 
@@ -134,10 +156,24 @@ MidiPlayer_Fb01::MidiPlayer_Fb01(SciVersion version) : MidiPlayer(version), _pla
 }
 
 MidiPlayer_Fb01::~MidiPlayer_Fb01() {
+	if (_driver)
+		_driver->setTimerCallback(NULL, NULL);
+	close();
 	delete _driver;
 }
 
 void MidiPlayer_Fb01::voiceMapping(int channel, int voices) {
+	if (_version <= SCI_VERSION_0_LATE) {
+		// The original SCI0 drivers don't do any software voice mapping. Only inside the device...
+		for (int i = 0; i < _numParts; ++i) {
+			if (_voices[i].channel == channel && _voices[i].poly != voices) {
+				_voices[i].poly = voices;
+				setVoiceParam(i, 0, voices);
+			}
+		}
+		return;
+	}
+
 	int curVoices = 0;
 
 	for (int i = 0; i < kVoices; i++)
@@ -162,6 +198,8 @@ void MidiPlayer_Fb01::assignVoices(int channel, int voices) {
 	for (int i = 0; i < kVoices; i++) {
 		if (_voices[i].channel == -1) {
 			_voices[i].channel = channel;
+			if (_voices[i].note != -1)
+				voiceOff(i);
 			if (--voices == 0)
 				break;
 		}
@@ -263,15 +301,22 @@ int MidiPlayer_Fb01::findVoice(int channel) {
 }
 
 void MidiPlayer_Fb01::sendToChannel(byte channel, byte command, byte op1, byte op2) {
-	for (int i = 0; i < kVoices; i++) {
+	for (int i = 0; i < _numParts; i++) {
 		// Send command to all voices assigned to this channel
+		// I case of SCI0 the voice mapping is done inside the device.
 		if (_voices[i].channel == channel)
-			_driver->send(command | i, op1, op2);
+			_driver->send(command | (_version <= SCI_VERSION_0_LATE ? channel : i), op1, op2);
 	}
 }
 
 void MidiPlayer_Fb01::setPatch(int channel, int patch) {
 	int bank = 0;
+
+	if (_version <= SCI_VERSION_0_LATE && channel == 15) {
+		// The original driver has some parsing related handling for program 127.
+		// We can't handle that here.
+		return;
+	}
 
 	_channels[channel].patch = patch;
 
@@ -280,13 +325,13 @@ void MidiPlayer_Fb01::setPatch(int channel, int patch) {
 		bank = 1;
 	}
 
-	for (int voice = 0; voice < kVoices; voice++) {
+	for (int voice = 0; voice < _numParts; voice++) {
 		if (_voices[voice].channel == channel) {
 			if (_voices[voice].bank != bank) {
 				_voices[voice].bank = bank;
 				setVoiceParam(voice, 4, bank);
 			}
-			_driver->send(0xc0 | voice, patch, 0);
+			_driver->send(0xc0 | (_version <= SCI_VERSION_0_LATE ? channel : voice), patch, 0);
 		}
 	}
 }
@@ -319,12 +364,20 @@ void MidiPlayer_Fb01::noteOn(int channel, int note, int velocity) {
 		return noteOff(channel, note);
 
 	if (_version > SCI_VERSION_0_LATE)
-		velocity = volumeTable[velocity >> 1] << 1;
+		velocity >>= 1;
 
 	int voice;
 	for (voice = 0; voice < kVoices; voice++) {
 		if ((_voices[voice].channel == channel) && (_voices[voice].note == note)) {
 			voiceOff(voice);
+
+			// Original bug #1:	The table is only applied here, but not to the voiceOn() call below.
+			// Original bug #2:	The velocity value also gets another right shift although the table
+			//					size of the volume table is 64 and not 32.
+			// --> disable this ? It certainly can't do any good.
+			if (_version > SCI_VERSION_0_LATE)
+				velocity = volumeTable[velocity >> 1] << 1;
+
 			voiceOn(voice, note, velocity);
 			return;
 		}
@@ -341,6 +394,12 @@ void MidiPlayer_Fb01::noteOn(int channel, int note, int velocity) {
 }
 
 void MidiPlayer_Fb01::controlChange(int channel, int control, int value) {
+	// Events for the control channel shouldn't arrive here.
+	// The original driver handles some specific parsing related midi events
+	// sent on channel 15, but we (hopefully) do that in the SCI music engine.
+	if (_version <= SCI_VERSION_0_LATE && channel == 15)
+		return;
+
 	switch (control) {
 	case 0x07: {
 		_channels[channel].volume = value;
@@ -348,12 +407,16 @@ void MidiPlayer_Fb01::controlChange(int channel, int control, int value) {
 		if (_version > SCI_VERSION_0_LATE)
 			value = volumeTable[value >> 1] << 1;
 
+#ifdef HARDWARE_MASTERVOLUME
+		sendToChannel(channel, 0xb0, control, value);
+#else
 		byte vol = _masterVolume;
 
 		if (vol > 0)
 			vol = CLIP<byte>(vol + 3, 0, 15);
 
 		sendToChannel(channel, 0xb0, control, (value * vol / 15) & 0x7f);
+#endif
 		break;
 	}
 	case 0x0a:
@@ -365,16 +428,19 @@ void MidiPlayer_Fb01::controlChange(int channel, int control, int value) {
 		sendToChannel(channel, 0xb0, control, value);
 		break;
 	case 0x4b:
-		// In early SCI0, voice count 15 signifies that the channel should be ignored
-		// for this song. Assuming that there are no embedded voice count commands in
-		// the MIDI stream, we should be able to get away with simply setting the voice
-		// count for this channel to 0.
-		voiceMapping(channel, (value != 15 ? value : 0));
+		voiceMapping(channel, value);
 		break;
 	case 0x7b:
-		for (int i = 0; i < kVoices; i++)
-			if ((_voices[i].channel == channel) && (_voices[i].note != -1))
-				voiceOff(i);
+		for (int i = 0; i < _numParts; i++) {
+			if ((_voices[i].channel == channel) && (_voices[i].note != -1)) {
+				_voices[i].note = -1;
+				sendToChannel(channel, 0xb0, control, value);
+			}
+		}
+		break;
+	default:
+		sendToChannel(channel, 0xb0, control, value);
+		break;
 	}
 }
 
@@ -383,6 +449,16 @@ void MidiPlayer_Fb01::send(uint32 b) {
 	byte channel = b & 0xf;
 	byte op1 = (b >> 8) & 0x7f;
 	byte op2 = (b >> 16) & 0x7f;
+
+	if (_version <= SCI_VERSION_0_LATE && command != 0xB0 && command != 0xC0) {
+		// Since the voice mapping takes place inside the hardware, most messages
+		// are simply passed through. Channel 15 is never assigned to a part but is
+		// used for certain parsing related events which we cannot handle here.
+		// Just making sure that no nonsense is sent to the device...
+		if (channel != 15)
+			sendToChannel(channel, command, op1, op2);
+		return;
+	}
 
 	switch (command) {
 	case 0x80:
@@ -408,9 +484,12 @@ void MidiPlayer_Fb01::send(uint32 b) {
 
 void MidiPlayer_Fb01::setVolume(byte volume) {
 	_masterVolume = volume;
-
+#ifdef HARDWARE_MASTERVOLUME
+	setSystemParam(0, 0x24, (CLIP<byte>(_masterVolume + 3, 0, 15) << 3) + 7);
+#else
 	for (uint i = 0; i < MIDI_CHANNELS; i++)
 		controlChange(i, 0x07, _channels[i].volume & 0x7f);
+#endif
 }
 
 int MidiPlayer_Fb01::getVolume() {
@@ -418,10 +497,17 @@ int MidiPlayer_Fb01::getVolume() {
 }
 
 void MidiPlayer_Fb01::playSwitch(bool play) {
+	_playSwitch = play;
 }
 
 void MidiPlayer_Fb01::midiTimerCallback(void *p) {
+	if (!p)
+		return;
+
 	MidiPlayer_Fb01 *m = (MidiPlayer_Fb01 *)p;
+
+	if (!m->isOpen())
+		return;
 
 	// Increase the age of the notes
 	for (int i = 0; i < kVoices; i++) {
@@ -442,24 +528,28 @@ void MidiPlayer_Fb01::setTimerCallback(void *timer_param, Common::TimerManager::
 	_driver->setTimerCallback(this, midiTimerCallback);
 }
 
-void MidiPlayer_Fb01::sendBanks(const byte *data, int size) {
-	if (size < 3072)
+void MidiPlayer_Fb01::sendBanks(const SciSpan<const byte> &data) {
+	if (data.size() < 3072)
 		error("Failed to read FB-01 patch");
 
 	// SSCI sends bank dumps containing 48 instruments at once. We cannot do that
 	// due to the limited maximum SysEx length. Instead we send the instruments
 	// one by one and store them in the banks.
 	for (int i = 0; i < 48; i++) {
-		sendVoiceData(0, data + i * 64);
+		sendVoiceData(0, data.subspan(i * 64));
 		storeVoiceData(0, 0, i);
 	}
 
 	// Send second bank if available
-	if ((size >= 6146) && (READ_BE_UINT16(data + 3072) == 0xabcd)) {
-		for (int i = 0; i < 48; i++) {
-			sendVoiceData(0, data + 3074 + i * 64);
-			storeVoiceData(0, 1, i);
-		}
+	if (data.size() < 6146)
+		return;
+
+	if (data.getUint16BEAt(3072) != 0xabcd)
+		return;
+
+	for (int i = 0; i < 48; i++) {
+		sendVoiceData(0, data.subspan(3074 + i * 64));
+		storeVoiceData(0, 1, i);
 	}
 }
 
@@ -472,17 +562,16 @@ int MidiPlayer_Fb01::open(ResourceManager *resMan) {
 		return retval;
 	}
 
-	// Set system channel to 0. We send this command over all 16 system channels
-	for (int i = 0; i < 16; i++)
-		setSystemParam(i, 0x20, 0);
+	// Set system channel to 0.
+	setSystemParam(0, 0x20, 0);
 
 	// Turn off memory protection
 	setSystemParam(0, 0x21, 0);
 
-	Resource *res = resMan->findResource(ResourceId(kResourceTypePatch, 2), 0);
+	Resource *res = resMan->findResource(ResourceId(kResourceTypePatch, 2), false);
 
 	if (res) {
-		sendBanks(res->data, res->size);
+		sendBanks(*res);
 	} else {
 		// Early SCI0 games have the sound bank embedded in the IMF driver.
 		// Note that these games didn't actually support the FB-01 as a device,
@@ -494,29 +583,35 @@ int MidiPlayer_Fb01::open(ResourceManager *resMan) {
 		Common::File f;
 
 		if (f.open("IMF.DRV")) {
-			int size = f.size();
-			byte *buf = new byte[size];
-
-			f.read(buf, size);
+			Common::SpanOwner<SciSpan<const byte> > buf;
+			buf->allocateFromStream(f);
 
 			// Search for start of sound bank
-			int offset;
-			for (offset = 0; offset < size; ++offset) {
-				if (!strncmp((char *)buf + offset, "SIERRA ", 7))
+			uint offset;
+			for (offset = 0; offset < buf->size() - 7; ++offset) {
+				if (!strncmp((const char *)buf->getUnsafeDataAt(offset, 7), "SIERRA ", 7))
 					break;
 			}
 
 			// Skip to voice data
 			offset += 0x20;
 
-			if (offset >= size)
+			if (offset >= buf->size())
 				error("Failed to locate start of FB-01 sound bank");
 
-			sendBanks(buf + offset, size - offset);
+			// The newer IMF.DRV versions without the sound bank will still have the 32 byte
+			// "SIERRA 1" header, but after that they want to send the patch.002 resource.
+			// These driver version are easy to identify by their small size.
+			if (buf->subspan(offset).size() < 3072) {
+				_missingFiles = _requiredFiles[1];
+				return MidiDriver::MERR_DEVICE_NOT_AVAILABLE;
+			}
 
-			delete[] buf;
-		} else
-			error("Failed to open IMF.DRV");
+			sendBanks(buf->subspan(offset));
+		} else {
+			_missingFiles = _version == SCI_VERSION_0_EARLY ? _requiredFiles[0] : _requiredFiles[1];
+			return MidiDriver::MERR_DEVICE_NOT_AVAILABLE;
+		}
 	}
 
 	// Set up voices to use MIDI channels 0 - 7
@@ -528,11 +623,65 @@ int MidiPlayer_Fb01::open(ResourceManager *resMan) {
 	// Set master volume
 	setSystemParam(0, 0x24, 0x7f);
 
+	_isOpen = true;
+
 	return 0;
 }
 
 void MidiPlayer_Fb01::close() {
-	_driver->close();
+	if (_driver)
+		_driver->setTimerCallback(NULL, NULL);
+	_isOpen = false;
+	if (_driver)
+		_driver->close();
+}
+
+void MidiPlayer_Fb01::initTrack(SciSpan<const byte>& header) {
+	if (!_isOpen || _version > SCI_VERSION_0_LATE)
+		return;
+
+	uint8 readPos = 0;
+	uint8 caps = header.getInt8At(readPos++);
+	if (caps != 0 && (_version == SCI_VERSION_0_EARLY || caps != 2))
+		return;
+
+	for (int i = 0; i < 8; ++i)
+		_voices[i] = Voice();
+
+	_numParts = 0;
+	for (int i = 0; i < 16; ++i) {
+		if (_version == SCI_VERSION_0_LATE) {
+			uint8 num = header.getInt8At(readPos++) & 0x7F;
+			uint8 flags = header.getInt8At(readPos++);
+
+			if (flags & 0x02) {
+				_voices[_numParts].channel = i;
+				_voices[_numParts].poly = num;
+				_numParts++;
+			}
+		} else {
+			uint8 val = header.getInt8At(readPos++);
+			if (val & 0x01) {
+				if (val & 0x08) {
+					if (val >> 4)
+						debugC(9, kDebugLevelSound, "MidiPlayer_Fb01::initTrack(): Unused rhythm channel found: 0x%.02x", i);
+				} else if ((val >> 4) != 0x0F) {
+					_voices[_numParts].channel = i;
+					_voices[_numParts].poly = val >> 4;
+					_numParts++;
+				}
+			} else if (val & 0x08) {
+				debugC(9, kDebugLevelSound, "MidiPlayer_Fb01::initTrack(): Control channel found: 0x%.02x", i);
+			}
+		}
+	}
+
+	for (int i = 0; i < _numParts; ++i)
+		setVoiceParam(i, 1, _voices[i].channel);
+
+	initVoices();
+	
+	setVolume(_masterVolume);
 }
 
 void MidiPlayer_Fb01::setVoiceParam(byte voice, byte param, byte value) {
@@ -553,7 +702,7 @@ void MidiPlayer_Fb01::setSystemParam(byte sysChan, byte param, byte value) {
 	sysEx(_sysExBuf, 6);
 }
 
-void MidiPlayer_Fb01::sendVoiceData(byte instrument, const byte *data) {
+void MidiPlayer_Fb01::sendVoiceData(byte instrument, const SciSpan<const byte> &data) {
 	_sysExBuf[2] = 0x00;
 	_sysExBuf[3] = 0x08 | instrument;
 	_sysExBuf[4] = 0x00;
@@ -595,28 +744,29 @@ void MidiPlayer_Fb01::initVoices() {
 		_sysExBuf[i++] = 0x00;
 	}
 
-	// Set up the 8 MIDI channels we will be using
-	for (int j = 0; j < 8; j++) {
+	// Set up the MIDI channels we will be using
+	for (int j = 0; j < _numParts; j++) {
+		int8 chan = _version > SCI_VERSION_0_LATE ? j : _voices[j].channel;
 		// One voice
-		_sysExBuf[i++] = 0x70 | j;
+		_sysExBuf[i++] = 0x70 | chan;
 		_sysExBuf[i++] = 0x00;
-		_sysExBuf[i++] = 0x01;
+		_sysExBuf[i++] = _voices[j].poly;
 
 		// Full range of keys
-		_sysExBuf[i++] = 0x70 | j;
+		_sysExBuf[i++] = 0x70 | chan;
 		_sysExBuf[i++] = 0x02;
 		_sysExBuf[i++] = 0x7f;
-		_sysExBuf[i++] = 0x70 | j;
+		_sysExBuf[i++] = 0x70 | chan;
 		_sysExBuf[i++] = 0x03;
 		_sysExBuf[i++] = 0x00;
 
 		// Voice bank 0
-		_sysExBuf[i++] = 0x70 | j;
+		_sysExBuf[i++] = 0x70 | chan;
 		_sysExBuf[i++] = 0x04;
 		_sysExBuf[i++] = 0x00;
 
 		// Voice 10
-		_sysExBuf[i++] = 0x70 | j;
+		_sysExBuf[i++] = 0x70 | chan;
 		_sysExBuf[i++] = 0x05;
 		_sysExBuf[i++] = 0x0a;
 	}
@@ -639,7 +789,7 @@ void MidiPlayer_Fb01::sysEx(const byte *msg, uint16 length) {
 byte MidiPlayer_Fb01::getPlayId() const {
 	switch (_version) {
 	case SCI_VERSION_0_EARLY:
-		return 0x01;
+		return 0x09;
 	case SCI_VERSION_0_LATE:
 		return 0x02;
 	default:
@@ -647,8 +797,15 @@ byte MidiPlayer_Fb01::getPlayId() const {
 	}
 }
 
+const char MidiPlayer_Fb01::_requiredFiles[2][12] = {
+	"'IMF.DRV'",
+	"'PATCH.002'"
+};
+
 MidiPlayer *MidiPlayer_Fb01_create(SciVersion version) {
 	return new MidiPlayer_Fb01(version);
 }
 
 } // End of namespace Sci
+
+#undef HARDWARE_MASTERVOLUME

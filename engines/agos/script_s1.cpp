@@ -26,10 +26,8 @@
 #include "graphics/palette.h"
 
 #include "agos/agos.h"
-
-#ifdef _WIN32_WCE
-extern bool isSmartphone();
-#endif
+#include "agos/intern.h"
+#include "agos/sound.h"
 
 namespace AGOS {
 

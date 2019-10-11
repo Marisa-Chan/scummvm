@@ -28,10 +28,16 @@
 #ifndef MORTEVIELLE_SOUND_H
 #define MORTEVIELLE_SOUND_H
 
-#include "audio/audiostream.h"
 #include "audio/mixer.h"
 #include "common/mutex.h"
 #include "common/queue.h"
+#ifdef USE_TTS
+#include "common/text-to-speech.h"
+#endif
+
+namespace Audio {
+class QueuingAudioStream;
+}
 
 namespace Mortevielle {
 class MortevielleEngine;
@@ -88,6 +94,9 @@ public:
 	~SoundManager();
 
 	Audio::Mixer *_mixer;
+#ifdef USE_TTS
+	Common::TextToSpeechManager *_ttsMan;
+#endif //USE_TTS
 	Audio::SoundHandle _soundHandle;
 	uint16 *_cfiphBuffer;
 
@@ -95,7 +104,7 @@ public:
 	void playSong(const byte *buf, uint usize, uint loops);
 	void loadAmbiantSounds();
 	void loadNoise();
-	void startSpeech(int rep, int ht, int typ);
+	void startSpeech(int rep, int character, int typ);
 	void waitSpeech();
 };
 

@@ -71,7 +71,7 @@ bool inflateZlibHeaderless(byte *dst, uint dstLen, const byte *src, uint srcLen,
 		return false;
 
 	// Set the dictionary, if provided
-	if (dict != 0) {
+	if (dict != nullptr) {
 		err = inflateSetDictionary(&stream, const_cast<byte *>(dict), dictLen);
 		if (err != Z_OK)
 			return false;
@@ -141,6 +141,79 @@ bool inflateZlibInstallShield(byte *dst, uint dstLen, const byte *src, uint srcL
 	return true;
 }
 
+bool inflateZlibHeaderless(Common::WriteStream *dst, Common::SeekableReadStream *src) {
+	byte *inBuffer, *outBuffer;
+	z_stream stream;
+	int status;
+
+	// Allocate buffers
+	inBuffer = new byte[kTempBufSize];
+	outBuffer = new byte[kTempBufSize];
+
+	/* Initialize Zlib inflation functions. */
+	stream.next_out = outBuffer;
+	stream.avail_out = kTempBufSize;
+	stream.next_in = inBuffer;
+	stream.avail_in = 0;
+
+	stream.zalloc = Z_NULL;
+	stream.zfree = Z_NULL;
+	stream.opaque = Z_NULL;
+
+	status = inflateInit(&stream);
+	if (status != Z_OK) {
+		delete[] inBuffer;
+		delete[] outBuffer;
+		return false;
+	}
+
+	// Inflate the input buffers. */
+	for (;;) {
+		int inBytes, outBytes;
+
+		/* If the input buffer is empty, try to obtain more data. */
+		if (stream.avail_in == 0) {
+			inBytes = src->read(inBuffer, kTempBufSize);
+			stream.next_in = inBuffer;
+			stream.avail_in = inBytes;
+		}
+
+		// Decompress as much stream data as we can. */
+		status = inflate(&stream, Z_SYNC_FLUSH);
+		if (status != Z_STREAM_END && status != Z_OK) {
+			delete[] inBuffer;
+			delete[] outBuffer;
+			return false;
+		}
+		outBytes = kTempBufSize - stream.avail_out;
+
+		// See if decompressed data is available. */
+		if (outBytes > 0) {
+			// Add data from the buffer to the output
+			int consumed = dst->write(outBuffer, outBytes);
+
+			// Move unused buffer data to buffer start
+			memmove(outBuffer, outBuffer + consumed, kTempBufSize - consumed);
+
+			// Reset inflation stream for available space
+			stream.next_out = outBuffer + outBytes - consumed;
+			stream.avail_out += consumed;
+		}
+
+		// If at inflation stream end and output is empty, leave loop
+		if (status == Z_STREAM_END && stream.avail_out == kTempBufSize)
+			break;
+	}
+
+	// End inflation buffers
+	status = inflateEnd(&stream);
+	delete[] inBuffer;
+	delete[] outBuffer;
+
+	// Return result
+	return (status == Z_OK);
+}
+
 #ifndef RELEASE_BUILD
 static bool _shownBackwardSeekingWarning = false;
 #endif
@@ -168,7 +241,7 @@ protected:
 public:
 
 	GZipReadStream(SeekableReadStream *w, uint32 knownSize = 0) : _wrapped(w), _stream() {
-		assert(w != 0);
+		assert(w != nullptr);
 
 		// Verify file header is correct
 		w->seek(0, SEEK_SET);
@@ -248,6 +321,8 @@ public:
 	bool seek(int32 offset, int whence = SEEK_SET) {
 		int32 newPos = 0;
 		switch (whence) {
+		default:
+			// fallthrough intended
 		case SEEK_SET:
 			newPos = offset;
 			break;
@@ -281,7 +356,7 @@ public:
 			_wrapped->seek(0, SEEK_SET);
 			_zlibErr = inflateReset(&_stream);
 			if (_zlibErr != Z_OK)
-				return false;	// FIXME: STREAM REWRITE
+				return false; // FIXME: STREAM REWRITE
 			_stream.next_in = _buf;
 			_stream.avail_in = 0;
 		}
@@ -297,7 +372,7 @@ public:
 		}
 
 		_eos = false;
-		return true;	// FIXME: STREAM REWRITE
+		return true; // FIXME: STREAM REWRITE
 	}
 };
 
@@ -316,6 +391,7 @@ protected:
 	ScopedPtr<WriteStream> _wrapped;
 	z_stream _stream;
 	int _zlibErr;
+	uint32 _pos;
 
 	void processData(int flushType) {
 		// This function is called by both write() and finalize().
@@ -333,8 +409,8 @@ protected:
 	}
 
 public:
-	GZipWriteStream(WriteStream *w) : _wrapped(w), _stream() {
-		assert(w != 0);
+	GZipWriteStream(WriteStream *w) : _wrapped(w), _stream(), _pos(0) {
+		assert(w != nullptr);
 
 		// Adding 16 to windowBits indicates to zlib that it is supposed to
 		// write gzip headers. This feature was added in zlib 1.2.0.4,
@@ -351,7 +427,7 @@ public:
 		_stream.next_out = _buf;
 		_stream.avail_out = BUFSIZE;
 		_stream.avail_in = 0;
-		_stream.next_in = 0;
+		_stream.next_in = nullptr;
 	}
 
 	~GZipWriteStream() {
@@ -403,8 +479,11 @@ public:
 		// ... and flush it to disk
 		processData(Z_NO_FLUSH);
 
+		_pos += dataSize - _stream.avail_in;
 		return dataSize - _stream.avail_in;
 	}
+
+	virtual int32 pos() const { return _pos; }
 };
 
 #endif	// USE_ZLIB

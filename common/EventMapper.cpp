@@ -35,7 +35,6 @@ List<Event> DefaultEventMapper::mapEvent(const Event &ev, EventSource *source) {
 	// of middle mouse button.
 	const uint32 vkeybdTime = 1000;
 
-	static bool vkeybd = false;
 	static uint32 vkeybdThen = 0;
 
 	if (ev.type == EVENT_MBUTTONDOWN) {
@@ -72,6 +71,12 @@ List<Event> DefaultEventMapper::mapEvent(const Event &ev, EventSource *source) {
 			addDelayedEvent(100, ev);
 		}
 #endif
+	}
+
+	if (ev.type == EVENT_JOYBUTTON_DOWN) {
+		if (ev.joystick.button == JOYSTICK_BUTTON_START || ev.joystick.button == JOYSTICK_BUTTON_GUIDE) {
+			mappedEvent.type = EVENT_MAINMENU;
+		}
 	}
 
 	// if it didn't get mapped, just pass it through

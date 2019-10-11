@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -33,7 +33,6 @@
 
 #include "zvision/sound/zork_raw.h"
 #include "zvision/zvision.h"
-#include "zvision/detection.h"
 
 namespace ZVision {
 
@@ -136,7 +135,8 @@ int RawChunkStream::readBuffer(int16 *buffer, Common::SeekableReadStream *stream
 	return bytesRead;
 }
 
-const SoundParams RawZorkStream::_zNemSoundParamLookupTable[32] = {{'0', 0x1F40, false, false, false},
+const SoundParams RawZorkStream::_zNemSoundParamLookupTable[32] = {
+	{'0', 0x1F40, false, false, false},
 	{'1', 0x1F40, true, false, false},
 	{'2', 0x1F40, false, false, true},
 	{'3', 0x1F40, true, false, true},
@@ -170,7 +170,8 @@ const SoundParams RawZorkStream::_zNemSoundParamLookupTable[32] = {{'0', 0x1F40,
 	{'x', 0xAC44, true, true, true}
 };
 
-const SoundParams RawZorkStream::_zgiSoundParamLookupTable[24] = {{'4', 0x2B11, false, false, false},
+const SoundParams RawZorkStream::_zgiSoundParamLookupTable[24] = {
+	{'4', 0x2B11, false, false, false},
 	{'5', 0x2B11, true, false, false},
 	{'6', 0x2B11, false, false, true},
 	{'7', 0x2B11, true, false, true},

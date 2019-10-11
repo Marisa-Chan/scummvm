@@ -11,8 +11,26 @@ MODULE_OBJS := \
 	misc.o \
 	savegame.o \
 	sound.o \
+	encoding.o \
 	testbed.o \
 	testsuite.o
+
+ifdef USE_CLOUD
+ifdef USE_LIBCURL
+MODULE_OBJS += \
+	cloud.o
+endif
+endif
+
+ifdef USE_SDL_NET
+MODULE_OBJS += \
+	webserver.o
+endif
+
+ifdef USE_TTS
+MODULE_OBJS += \
+	speech.o
+endif
 
 MODULE_DIRS += \
 	engines/testbed

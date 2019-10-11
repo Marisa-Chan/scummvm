@@ -33,7 +33,6 @@
 #include "common/random.h"
 #include "common/rect.h"
 #include "common/stack.h"
-#include "engines/advancedDetector.h"
 #include "engines/engine.h"
 #include "common/error.h"
 #include "graphics/surface.h"
@@ -116,6 +115,7 @@ const int kInventoryStringIndex = 186;
 const int kQuestionStringIndex = 247;
 const int kDialogStringIndex = 292;
 const int kMenuPlaceStringIndex = 435;
+const int kStartingScreenStringIndex = 456;
 const int kMenuActionStringIndex = 476;
 const int kMenuSelfStringIndex = 497;
 const int kMenuSayStringIndex = 502;

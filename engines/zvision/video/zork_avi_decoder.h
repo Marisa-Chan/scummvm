@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -31,30 +31,22 @@ namespace ZVision {
 
 class ZorkAVIDecoder : public Video::AVIDecoder {
 public:
-	ZorkAVIDecoder(Audio::Mixer::SoundType soundType = Audio::Mixer::kPlainSoundType) :
-		Video::AVIDecoder(soundType) {}
+	ZorkAVIDecoder() {}
 
 	virtual ~ZorkAVIDecoder() {}
 
 private:
 	class ZorkAVIAudioTrack : public Video::AVIDecoder::AVIAudioTrack {
 	public:
-		ZorkAVIAudioTrack(const AVIStreamHeader &streamHeader, const PCMWaveFormat &waveFormat, Audio::Mixer::SoundType soundType) :
-			Video::AVIDecoder::AVIAudioTrack(streamHeader, waveFormat, soundType),
-			decoder(NULL) {
-			if (_audStream) {
-				decoder = new RawChunkStream(_audStream->isStereo());
-			}
-		}
-		virtual ~ZorkAVIAudioTrack() {
-			if (decoder)
-				delete decoder;
-		}
+		ZorkAVIAudioTrack(const AVIStreamHeader &streamHeader, const PCMWaveFormat &waveFormat, Audio::Mixer::SoundType soundType);
 
+		void createAudioStream();
 		void queueSound(Common::SeekableReadStream *stream);
 		void resetStream();
+
 	private:
-		RawChunkStream *decoder;
+		Audio::QueuingAudioStream *_queueStream;
+		RawChunkStream _decoder;
 	};
 
 	Video::AVIDecoder::AVIAudioTrack *createAudioTrack(Video::AVIDecoder::AVIStreamHeader sHeader, Video::AVIDecoder::PCMWaveFormat wvInfo);

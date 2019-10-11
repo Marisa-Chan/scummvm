@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -105,7 +105,12 @@ bool FistControl::process(uint32 deltaTimeInMillis) {
 		if (_animation->needsUpdate()) {
 			const Graphics::Surface *frameData = _animation->decodeNextFrame();
 			if (frameData)
-				_engine->getRenderManager()->blitSurfaceToBkgScaled(*frameData, _anmRect);
+				// WORKAROUND: Ignore the target frame dimensions for the finger animations.
+				// The target dimensions specify an area smaller than expected, thus if we
+				// scale the finger videos to fit these dimensions, they are not aligned
+				// correctly. Not scaling these videos yields a result identical to the
+				// original. Fixes bug #6784.
+				_engine->getRenderManager()->blitSurfaceToBkg(*frameData, _anmRect.left, _anmRect.top);
 		}
 	}
 

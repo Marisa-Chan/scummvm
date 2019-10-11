@@ -62,13 +62,25 @@ AmigaOSFilesystemNode::AmigaOSFilesystemNode() {
 	_bIsDirectory = true;
 	_sPath = "";
 	_pFileLock = 0;
-	_nProt = 0; // Protection is ignored for the root volume
+	_nProt = 0; // Protection is ignored for the root volume.
 	LEAVE();
 }
 
 AmigaOSFilesystemNode::AmigaOSFilesystemNode(const Common::String &p) {
 	ENTER();
 
+	// WORKAROUND:
+	// This is a bug in AmigaOS4 newlib.library 53.30 and lower.
+	// It will be removed once a fixed version is available to public.
+	// DESCRIPTION:
+	// We need to explicitly open dos.library and its IDOS interface.
+	// Otherwise we will hit an IDOS NULL pointer after compiling a
+	// shared binary with (shared) plugins.
+	// The hit will happen on loading a game from any engine, if more
+	// than one engine/(shared) plugin is available.
+	DOSBase = IExec->OpenLibrary("dos.library", 0);
+	IDOS = (struct DOSIFace *)IExec->GetInterface(DOSBase, "main", 1, NULL);
+	
 	int offset = p.size();
 
 	//assert(offset > 0);
@@ -84,7 +96,7 @@ AmigaOSFilesystemNode::AmigaOSFilesystemNode(const Common::String &p) {
 	_bIsDirectory = false;
 	_bIsValid = false;
 
-	// Check whether the node exists and if it's a directory
+	// Check whether the node exists and if it's a directory.
 	struct ExamineData * pExd = IDOS->ExamineObjectTags(EX_StringNameInput,_sPath.c_str(),TAG_END);
 	if (pExd) {
 		_nProt = pExd->Protection;
@@ -93,7 +105,7 @@ AmigaOSFilesystemNode::AmigaOSFilesystemNode(const Common::String &p) {
 			_pFileLock = IDOS->Lock((CONST_STRPTR)_sPath.c_str(), SHARED_LOCK);
 			_bIsValid = (_pFileLock != 0);
 
-			// Add a trailing slash if needed
+			// Add a trailing slash if needed.
 			const char c = _sPath.lastChar();
 			if (c != '/' && c != ':')
 				_sPath += '/';
@@ -104,6 +116,11 @@ AmigaOSFilesystemNode::AmigaOSFilesystemNode(const Common::String &p) {
 
 		IDOS->FreeDosObject(DOS_EXAMINEDATA, pExd);
 	}
+
+	// WORKAROUND:
+	// Close dos.library and its IDOS interface again.
+	IExec->DropInterface((struct Interface *)IDOS);
+	IExec->CloseLibrary(DOSBase);
 
 	LEAVE();
 }
@@ -161,7 +178,7 @@ AmigaOSFilesystemNode::AmigaOSFilesystemNode(BPTR pLock, const char *pDisplayNam
 	LEAVE();
 }
 
-// We need the custom copy constructor because of DupLock()
+// We need the custom copy constructor because of DupLock().
 AmigaOSFilesystemNode::AmigaOSFilesystemNode(const AmigaOSFilesystemNode& node)
 : AbstractFSNode() {
 	ENTER();
@@ -237,9 +254,6 @@ bool AmigaOSFilesystemNode::getChildren(AbstractFSList &myList, ListMode mode, b
 	ENTER();
 	bool ret = false;
 
-	// TODO: Honor the hidden flag
-	// There is no such thing as a hidden flag in AmigaOS...
-
 	if (!_bIsValid) {
 		debug(6, "Invalid node");
 		LEAVE();
@@ -266,7 +280,7 @@ bool AmigaOSFilesystemNode::getChildren(AbstractFSList &myList, ListMode mode, b
 	if (context) {
 		struct ExamineData * pExd = NULL; // NB: No need to free the value after usage, everything will be dealt with by the DirContext release
 
-		AmigaOSFilesystemNode *entry ;
+		AmigaOSFilesystemNode *entry;
 		while ( (pExd = IDOS->ExamineDir(context)) ) {
 			if (     (EXD_IS_FILE(pExd) && ( Common::FSNode::kListFilesOnly == mode ))
 				||  (EXD_IS_DIRECTORY(pExd) && ( Common::FSNode::kListDirectoriesOnly == mode ))
@@ -343,9 +357,9 @@ bool AmigaOSFilesystemNode::isReadable() const {
 	if (!_bIsValid)
 		return false;
 
-	// Regular RWED protection flags are low-active or inverted, thus the negation.
-	// Moreover, a pseudo root filesystem is readable whatever the
-	// protection says.
+	// Regular RWED protection flags are low-active or inverted,
+	// thus the negation. Moreover, a pseudo root filesystem is
+	// readable whatever the protection says.
 	bool readable = !(_nProt & EXDF_OTR_READ) || isRootNode();
 
 	return readable;
@@ -355,9 +369,10 @@ bool AmigaOSFilesystemNode::isWritable() const {
 	if (!_bIsValid)
 		return false;
 
-	// Regular RWED protection flags are low-active or inverted, thus the negation.
-	// Moreover, a pseudo root filesystem is never writable whatever
-	// the protection says (Because of it's pseudo nature).
+	// Regular RWED protection flags are low-active or inverted,
+	// thus the negation. Moreover, a pseudo root filesystem is
+	// never writable whatever the protection says.
+	// (Because of it's pseudo nature).
 	bool writable = !(_nProt & EXDF_OTR_WRITE) && !isRootNode();
 
 	return writable;
@@ -381,20 +396,25 @@ AbstractFSList AmigaOSFilesystemNode::listVolumes() const {
 	dosList = IDOS->NextDosEntry(dosList, LDF_VOLUMES);
 	while (dosList) {
 		if (dosList->dol_Type == DLT_VOLUME &&
-			dosList->dol_Name) {
+			dosList->dol_Name &&
+			dosList->dol_Port) {
 
 			// The original line was
-			//if (dosList->dol_Type == DLT_VOLUME &&
-			//dosList->dol_Name &&
-			//dosList->dol_Task) {
-			// which errored using SDK 53.24 with a 'struct dosList' has no member called 'dol_Task'
-			// I removed dol_Task because it's not used anywhere else
-			// and it neither brought up further errors nor crashes or regressions
+			//
+			//	if (dosList->dol_Type == DLT_VOLUME &&
+			//		dosList->dol_Name &&
+			//		dosList->dol_Task) {
+			//
+			// which errored using SDK 53.24 with a
+			//	'struct dosList' has no member called 'dol_Task'
+			// The reason for that was, that
+			//	1) dol_Task wasn't a task pointer, it is a message port instead.
+			//	2) it was redefined to be dol_Port in dos/obsolete.h in aforementioned SDK.
 
-			// Copy name to buffer
+			// Copy name to buffer.
 			IDOS->CopyStringBSTRToC(dosList->dol_Name, buffer, MAXPATHLEN);
 
-			// Volume name + '\0'
+			// Volume name + '\0'.
 			char *volName = new char [strlen(buffer) + 1];
 
 			strcpy(volName, buffer);
@@ -406,7 +426,7 @@ AbstractFSList AmigaOSFilesystemNode::listVolumes() const {
 
 				char *devName = new char [MAXPATHLEN];
 
-				// Find device name
+				// Find device name.
 				IDOS->DevNameFromLock(volumeLock, devName, MAXPATHLEN, DN_DEVICEONLY);
 
 				sprintf(buffer, "%s (%s)", volName, devName);
@@ -439,6 +459,11 @@ Common::SeekableReadStream *AmigaOSFilesystemNode::createReadStream() {
 
 Common::WriteStream *AmigaOSFilesystemNode::createWriteStream() {
 	return StdioStream::makeFromPath(getPath(), true);
+}
+
+bool AmigaOSFilesystemNode::createDirectory() {
+	warning("AmigaOSFilesystemNode::createDirectory(): Not supported");
+	return _bIsValid && _bIsDirectory;
 }
 
 #endif //defined(__amigaos4__)

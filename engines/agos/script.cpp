@@ -27,12 +27,8 @@
 #include "common/system.h"
 #include "common/textconsole.h"
 
-#include "agos/animation.h"
 #include "agos/agos.h"
-
-#ifdef _WIN32_WCE
-extern bool isSmartphone();
-#endif
+#include "agos/intern.h"
 
 namespace AGOS {
 

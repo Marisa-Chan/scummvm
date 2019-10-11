@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -35,12 +35,15 @@ class DynamicHotspot {
 public:
 	bool _active;
 	int _seqIndex;
+	int _animIndex;
 	Common::Rect _bounds;
 	Common::Point _feetPos;
 	Facing _facing;
 	int _descId;
 	int _verbId;
+	bool _valid;	// V2
 	int _articleNumber;
+	byte _syntax;	// V2
 	CursorType _cursor;
 
 	/**
@@ -54,7 +57,17 @@ public:
 	void synchronize(Common::Serializer &s);
 };
 
-#define DYNAMIC_HOTSPOTS_SIZE 8
+#define DYNAMIC_HOTSPOTS_SIZE 16
+
+#define SYNTAX_SINGULAR               0
+#define SYNTAX_PLURAL                 1
+#define SYNTAX_PARTITIVE              2
+#define SYNTAX_SINGULAR_MASC          3
+#define SYNTAX_SINGULAR_FEM           4
+#define SYNTAX_SINGULAR_LIVING        5
+#define SYNTAX_MASC_NOT_PROPER        6
+#define SYNTAX_FEM_NOT_PROPER         7
+#define MAX_SYNTAX                    8
 
 class DynamicHotspots {
 private:
@@ -68,6 +81,7 @@ public:
 
 	Common::Array<MADS::DynamicHotspot>::size_type size() const { return _entries.size(); }
 	DynamicHotspot &operator[](uint idx) { return _entries[idx]; }
+	int add(int descId, int verbId, byte syntax, int seqIndex, const Common::Rect &bounds);	// V2
 	int add(int descId, int verbId, int seqIndex, const Common::Rect &bounds);
 	int setPosition(int index, const Common::Point &pos, Facing facing);
 	int setCursor(int index, CursorType cursor);
@@ -95,6 +109,7 @@ public:
 	Facing _facing;
 	int _articleNumber;
 	bool _active;
+	byte _syntax;	// V2
 	CursorType _cursor;
 	int _vocabId;
 	int _verbId;
@@ -113,6 +128,12 @@ public:
 	 * Sets the active state of a given hotspot
 	 */
 	void activate(int vocabId, bool active);
+
+	/**
+	 * Sets the active state of a given hotspot if it includes a given position
+	 */
+	void activateAtPos(int vocabId, bool active, Common::Point pos);
+
 };
 
 } // End of namespace MADS

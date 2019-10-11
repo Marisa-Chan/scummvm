@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef TONY_H
-#define TONY_H
+#ifndef TONY_TONY_H
+#define TONY_TONY_H
 
 #include "common/scummsys.h"
 #include "common/system.h"
@@ -104,6 +104,7 @@ public:
 	RMResUpdate _resUpdate;
 	uint32 _hEndOfFrame;
 	Common::File _vdbFP;
+	SoundCodecs _vdbCodec;
 	Common::Array<VoiceHeader> _voices;
 	FPSound _theSound;
 	Common::List<FPSfx *> _activeSfx;
@@ -162,7 +163,6 @@ public:
 	RMGfxEngine *getEngine() {
 		return &_theEngine;
 	}
-	void GUIError(const Common::String &msg);
 
 	virtual bool canLoadGameStateCurrently();
 	virtual bool canSaveGameStateCurrently();
@@ -241,4 +241,4 @@ extern TonyEngine *g_vm;
 
 } // End of namespace Tony
 
-#endif /* TONY_H */
+#endif /* TONY_TONY_H */

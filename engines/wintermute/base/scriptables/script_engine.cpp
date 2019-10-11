@@ -67,6 +67,13 @@ ScEngine::ScEngine(BaseGame *inGame) : BaseClass(inGame) {
 		_globals->setProp("Math", &val);
 	}
 
+	// register 'Directory' as global variable
+	if (!_globals->propExists("Directory")) {
+		ScValue val(_gameRef);
+		val.setNative(_gameRef->_directoryClass, true);
+		_globals->setProp("Directory", &val);
+	}
+
 	// prepare script cache
 	for (int i = 0; i < MAX_CACHED_SCRIPTS; i++) {
 		_cachedScripts[i] = nullptr;
@@ -144,7 +151,15 @@ ScScript *ScEngine::runScript(const char *filename, BaseScriptHolder *owner) {
 	}
 
 	// add new script
+#if EXTENDED_DEBUGGER_ENABLED
+	DebuggableScEngine* debuggableEngine;
+	debuggableEngine = dynamic_cast<DebuggableScEngine*>(this);
+	// TODO: Not pretty
+	assert(debuggableEngine);
+	ScScript *script = new DebuggableScript(_gameRef, debuggableEngine);
+#else
 	ScScript *script = new ScScript(_gameRef, this);
+#endif
 	bool ret = script->create(filename, compBuffer, compSize, owner);
 	if (DID_FAIL(ret)) {
 		_gameRef->LOG(ret, "Error running script '%s'...", filename);
@@ -425,7 +440,15 @@ int ScEngine::getNumScripts(int *running, int *waiting, int *persistent) {
 			numPersistent++;
 			break;
 		default:
-			warning("ScEngine::GetNumScripts - unhandled enum");
+			// Those states were not handled in original WME as well:
+			// * SCRIPT_FINISHED,
+			// * SCRIPT_ERROR,
+			// * SCRIPT_WAITING_SCRIPT,
+			// * SCRIPT_THREAD_FINISHED		
+			debugN("ScEngine::GetNumScripts - unhandled enum: %d\n", _scripts[i]->_state);
+
+			// This method calculates thread counts to be shown at debug screen only
+			// Extend BaseGame::displayDebugInfo() if you want to handle those states
 			break;
 		}
 		numTotal++;

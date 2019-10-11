@@ -28,6 +28,7 @@
 #include "common/str.h"
 
 #include "graphics/surface.h"
+#include "graphics/transparent_surface.h"
 
 #include "gui/ThemeEngine.h"
 
@@ -42,9 +43,15 @@ typedef void (VectorRenderer::*DrawingFunctionCallback)(const Common::Rect &, co
 
 
 struct DrawStep {
+	DrawingFunctionCallback drawingCall; /**< Pointer to drawing function */
+	Graphics::Surface* blitSrc;
+	Graphics::TransparentSurface* blitAlphaSrc;
+
 	struct Color {
 		uint8 r, g, b;
 		bool set;
+
+		Color () : r(0), g(0), b(0), set(false) {}
 	};
 	Color fgColor; /**< Foreground color */
 	Color bgColor; /**< background color */
@@ -79,8 +86,24 @@ struct DrawStep {
 
 	uint32 scale; /**< scale of all the coordinates in FIXED POINT with 16 bits mantissa */
 
-	DrawingFunctionCallback drawingCall; /**< Pointer to drawing function */
-	Graphics::Surface *blitSrc;
+	GUI::ThemeEngine::AutoScaleMode autoscale; /**< scale alphaimage if present */
+
+	DrawStep() {
+		drawingCall = nullptr;
+		blitSrc = nullptr;
+		blitAlphaSrc = nullptr;
+		// fgColor, bgColor, gradColor1, gradColor2, bevelColor initialized by Color default constructor
+		autoWidth = autoHeight = false;
+		x = y = w = h = 0;
+		// padding initialized by Common::Rect default constructor
+		xAlign = yAlign = kVectorAlignManual;
+		shadow = stroke = factor = radius = bevel = 0;
+		fillMode = 0;
+		shadowFillMode = 0;
+		extraData = 0;
+		scale = 0;
+		autoscale = GUI::ThemeEngine::kAutoScaleNone;
+	}
 };
 
 VectorRenderer *createRenderer(int mode);
@@ -198,7 +221,7 @@ public:
 	 * @param h Height of the square
 	 * @param bevel Amount of bevel. Must be positive.
 	 */
-	virtual void drawBeveledSquare(int x, int y, int w, int h, int bevel) = 0;
+	virtual void drawBeveledSquare(int x, int y, int w, int h) = 0;
 
 	/**
 	 * Draws a tab-like shape, specially thought for the Tab widget.
@@ -212,7 +235,6 @@ public:
 	 * @param r Radius of the corners of the tab (0 for squared tabs).
 	 */
 	virtual void drawTab(int x, int y, int r, int w, int h) = 0;
-
 
 	/**
 	 * Simple helper function to draw a cross.
@@ -269,8 +291,15 @@ public:
 	 *
 	 * @param surface Pointer to a Surface object.
 	 */
-	virtual void setSurface(Surface *surface) {
+	virtual void setSurface(TransparentSurface *surface) {
 		_activeSurface = surface;
+	}
+
+	/**
+	 * Returns the currently active drawing surface
+	 */
+	virtual TransparentSurface *getActiveSurface() {
+		return _activeSurface;
 	}
 
 	/**
@@ -341,6 +370,16 @@ public:
 	}
 
 	/**
+	 * Sets the clipping rectangle to be used by draw calls.
+	 *
+	 * Draw calls are restricted to pixels that are inside of the clipping
+	 * rectangle. Pixels outside the clipping rectangle are not modified.
+	 * To disable the clipping rectangle, call this method with a rectangle
+	 * the same size as the target surface.
+	 */
+	virtual void setClippingRect(const Common::Rect &clippingArea) = 0;
+
+	/**
 	 * Translates the position data inside a DrawStep into actual
 	 * screen drawing positions.
 	 */
@@ -395,7 +434,7 @@ public:
 	void drawCallback_BEVELSQ(const Common::Rect &area, const DrawStep &step) {
 		uint16 x, y, w, h;
 		stepGetPositions(step, area, x, y, w, h);
-		drawBeveledSquare(x, y, w, h, _bevel);
+		drawBeveledSquare(x, y, w, h);
 	}
 
 	void drawCallback_TAB(const Common::Rect &area, const DrawStep &step) {
@@ -407,7 +446,13 @@ public:
 	void drawCallback_BITMAP(const Common::Rect &area, const DrawStep &step) {
 		uint16 x, y, w, h;
 		stepGetPositions(step, area, x, y, w, h);
-		blitAlphaBitmap(step.blitSrc, Common::Rect(x, y, x + w, y + h));
+		blitKeyBitmap(step.blitSrc, Common::Point(x, y));
+	}
+
+	void drawCallback_ALPHABITMAP(const Common::Rect &area, const DrawStep &step) {
+		uint16 x, y, w, h;
+		stepGetPositions(step, area, x, y, w, h);
+		blitAlphaBitmap(step.blitAlphaSrc, Common::Rect(x, y, x + w, y + h), step.autoscale, step.xAlign, step.yAlign); // TODO
 	}
 
 	void drawCallback_CROSS(const Common::Rect &area, const DrawStep &step) {
@@ -425,7 +470,7 @@ public:
 	 * @param area Zone to paint on
 	 * @param step Pointer to a DrawStep struct.
 	 */
-	virtual void drawStep(const Common::Rect &area, const DrawStep &step, uint32 extra = 0);
+	virtual void drawStep(const Common::Rect &area, const Common::Rect &clip, const DrawStep &step, uint32 extra = 0);
 
 	/**
 	 * Copies the part of the current frame to the system overlay.
@@ -459,15 +504,17 @@ public:
 	virtual void blitSurface(const Graphics::Surface *source, const Common::Rect &r) = 0;
 
 	/**
-	 * Blits a given graphics surface into a small area of the current drawing surface.
-	 *
-	 * Note that the given surface is expected to be smaller than the
-	 * active drawing surface, hence the WHOLE source surface will be
-	 * blitted into the active surface, at the position specified by "r".
+	 * Blits a given graphics surface at the specified position of the current drawing surface.
 	 */
-	virtual void blitSubSurface(const Graphics::Surface *source, const Common::Rect &r) = 0;
+	virtual void blitSubSurface(const Graphics::Surface *source, const Common::Point &p) = 0;
 
-	virtual void blitAlphaBitmap(const Graphics::Surface *source, const Common::Rect &r) = 0;
+	virtual void blitKeyBitmap(const Graphics::Surface *source, const Common::Point &p) = 0;
+
+	virtual void blitAlphaBitmap(Graphics::TransparentSurface *source, const Common::Rect &r,
+			GUI::ThemeEngine::AutoScaleMode autoscale = GUI::ThemeEngine::kAutoScaleNone,
+			Graphics::DrawStep::VectorAlignment xAlign = Graphics::DrawStep::kVectorAlignManual,
+			Graphics::DrawStep::VectorAlignment yAlign = Graphics::DrawStep::kVectorAlignManual,
+			int alpha = 255) = 0;
 
 	/**
 	 * Draws a string into the screen. Wrapper for the Graphics::Font string drawing
@@ -491,7 +538,7 @@ public:
 	virtual void applyScreenShading(GUI::ThemeEngine::ShadingStyle) = 0;
 
 protected:
-	Surface *_activeSurface; /**< Pointer to the surface currently being drawn */
+	TransparentSurface *_activeSurface; /**< Pointer to the surface currently being drawn */
 
 	FillMode _fillMode; /**< Defines in which way (if any) are filled the drawn shapes */
 	ShadowFillMode _shadowFillMode;

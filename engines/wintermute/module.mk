@@ -27,12 +27,15 @@ MODULE_OBJS := \
 	ad/ad_talk_holder.o \
 	ad/ad_talk_node.o \
 	ad/ad_waypoint_group.o \
+	base/scriptables/debuggable/debuggable_script.o \
+	base/scriptables/debuggable/debuggable_script_engine.o \
 	base/scriptables/script.o \
 	base/scriptables/script_engine.o \
 	base/scriptables/script_stack.o \
 	base/scriptables/script_value.o \
 	base/scriptables/script_ext_array.o \
 	base/scriptables/script_ext_date.o \
+	base/scriptables/script_ext_directory.o \
 	base/scriptables/script_ext_file.o \
 	base/scriptables/script_ext_math.o \
 	base/scriptables/script_ext_object.o \
@@ -43,6 +46,7 @@ MODULE_OBJS := \
 	base/file/base_file_entry.o \
 	base/file/base_package.o \
 	base/file/base_save_thumb_file.o \
+	base/file/base_savefile_manager_file.o \
 	base/font/base_font_bitmap.o \
 	base/font/base_font_truetype.o \
 	base/font/base_font.o \
@@ -88,6 +92,18 @@ MODULE_OBJS := \
 	base/saveload.o \
 	base/save_thumb_helper.o \
 	base/timer.o \
+	debugger/breakpoint.o \
+	debugger/debugger_controller.o \
+	debugger/error.o \
+	debugger/listing_providers/blank_listing.o \
+	debugger/listing_providers/blank_listing_provider.o \
+	debugger/listing_providers/basic_source_listing_provider.o \
+	debugger/listing_providers/cached_source_listing_provider.o \
+	debugger/listing_providers/source_listing.o \
+	debugger/listing.o \
+	debugger/script_monitor.o \
+	debugger/watch.o \
+	debugger/watch_instance.o \
 	detection.o \
 	math/math_util.o \
 	math/matrix4.o \

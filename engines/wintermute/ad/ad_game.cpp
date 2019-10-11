@@ -38,6 +38,7 @@
 #include "engines/wintermute/ad/ad_scene.h"
 #include "engines/wintermute/ad/ad_scene_state.h"
 #include "engines/wintermute/ad/ad_sentence.h"
+#include "engines/wintermute/base/base_engine.h"
 #include "engines/wintermute/base/base_file_manager.h"
 #include "engines/wintermute/base/font/base_font.h"
 #include "engines/wintermute/base/base_object.h"
@@ -2173,7 +2174,13 @@ bool AdGame::onMouseLeftUp() {
 	_capturedObject = nullptr;
 	_mouseLeftDown = false;
 
-	bool handled = /*_state==GAME_RUNNING &&*/ DID_SUCCEED(applyEvent("LeftRelease"));
+	bool handled;
+	if (BaseEngine::instance().getTargetExecutable() < WME_LITE) {
+		handled = _state==GAME_RUNNING && DID_SUCCEED(applyEvent("LeftRelease"));
+	} else {
+		handled = DID_SUCCEED(applyEvent("LeftRelease"));
+	}
+	
 	if (!handled) {
 		if (_activeObject != nullptr) {
 			_activeObject->applyEvent("LeftRelease");
@@ -2261,7 +2268,7 @@ bool AdGame::onMouseRightUp() {
 bool AdGame::displayDebugInfo() {
 	char str[100];
 	if (_gameRef->_debugDebugMode) {
-		sprintf(str, "Mouse: %d, %d (scene: %d, %d)", _mousePos.x, _mousePos.y, _mousePos.x + _scene->getOffsetLeft(), _mousePos.y + _scene->getOffsetTop());
+		sprintf(str, "Mouse: %d, %d (scene: %d, %d)", _mousePos.x, _mousePos.y, _mousePos.x + (_scene ? _scene->getOffsetLeft() : 0), _mousePos.y + (_scene ? _scene->getOffsetTop() : 0));
 		_systemFont->drawText((byte *)str, 0, 90, _renderer->getWidth(), TAL_RIGHT);
 
 		sprintf(str, "Scene: %s (prev: %s)", (_scene && _scene->getName()) ? _scene->getName() : "???", _prevSceneName ? _prevSceneName : "???");
@@ -2280,4 +2287,7 @@ bool AdGame::onScriptShutdown(ScScript *script) {
 	return STATUS_OK;
 }
 
+Common::String AdGame::debuggerToString() const {
+	return Common::String::format("%p: Game \"%s\"", (const void *)this, getName());
+}
 } // End of namespace Wintermute

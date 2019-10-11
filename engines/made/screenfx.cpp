@@ -51,7 +51,7 @@ ScreenEffects::ScreenEffects(Screen *screen) : _screen(screen) {
 	vfxHeight = 0;
 
 	_fxPalette = new byte[768];
-	
+
 	_blendedPaletteStatus._active = false;
 	_blendedPaletteStatus._palette = _blendedPaletteStatus._newPalette = nullptr;
 	_blendedPaletteStatus._colorCount = 0;
@@ -201,7 +201,7 @@ void ScreenEffects::startBlendedPalette(byte *palette, byte *newPalette, int col
 }
 
 void ScreenEffects::stepBlendedPalette() {
-	if (_blendedPaletteStatus._active && _blendedPaletteStatus._value < _blendedPaletteStatus._maxValue) {
+	if (_blendedPaletteStatus._active && _blendedPaletteStatus._value <= _blendedPaletteStatus._maxValue) {
 		setBlendedPalette(_blendedPaletteStatus._palette, _blendedPaletteStatus._newPalette,
 			_blendedPaletteStatus._colorCount, _blendedPaletteStatus._value, _blendedPaletteStatus._maxValue);
 		if (_blendedPaletteStatus._value == _blendedPaletteStatus._maxValue)

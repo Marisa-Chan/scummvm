@@ -27,6 +27,7 @@
  */
 
 #include "engines/wintermute/base/base_game.h"
+#include "engines/wintermute/base/base_engine.h"
 #include "engines/wintermute/base/base_parser.h"
 #include "engines/wintermute/base/base_active_rect.h"
 #include "engines/wintermute/base/base_dynamic_buffer.h"
@@ -139,13 +140,12 @@ bool UIWindow::display(int offsetX, int offsetY) {
 			_shieldButton->setListener(this, _shieldButton, 0);
 			_shieldButton->_parent = this;
 		}
-		if (_shieldButton) {
-			_shieldButton->_posX = _shieldButton->_posY = 0;
-			_shieldButton->setWidth(_gameRef->_renderer->getWidth());
-			_shieldButton->setHeight(_gameRef->_renderer->getHeight());
 
-			_shieldButton->display();
-		}
+		_shieldButton->_posX = _shieldButton->_posY = 0;
+		_shieldButton->setWidth(_gameRef->_renderer->getWidth());
+		_shieldButton->setHeight(_gameRef->_renderer->getHeight());
+
+		_shieldButton->display();
 	}
 
 	if (!_visible) {
@@ -603,6 +603,13 @@ bool UIWindow::loadBuffer(char *buffer, bool complete) {
 	if (cmd == PARSERR_GENERIC) {
 		_gameRef->LOG(0, "Error loading WINDOW definition");
 		return STATUS_FAILED;
+	}
+
+	// HACK: Increase window title height by 1 for "5 Lethal Demons" game
+	// For some reason getFontHeight() is off-by-one comparing to height set in TITLE_RECT,
+	// Which made text being bigger then title rect and drawing was skipped.
+	if (BaseEngine::instance().getGameId() == "5ld" && !_titleRect.isRectEmpty() && _text) {
+		_titleRect.bottom ++;
 	}
 
 	correctSize();

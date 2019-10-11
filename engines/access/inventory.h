@@ -119,7 +119,7 @@ public:
 	int _startTravelItem;
 public:
 	InventoryManager(AccessEngine *vm);
-	
+
 	int &operator[](int idx);
 
 	int useItem();
@@ -128,6 +128,7 @@ public:
 	void refreshInventory();
 
 	int newDisplayInv();
+	int displayInv();
 
 	/**
 	* Synchronize savegame data

@@ -30,7 +30,7 @@
 
 namespace Common {
 
-DCT::DCT(int bits, TransformType trans) : _bits(bits), _cos(_bits + 2), _trans(trans), _rdft(0) {
+DCT::DCT(int bits, TransformType trans) : _bits(bits), _cos(1 << (_bits + 2) ), _trans(trans), _rdft(nullptr) {
 	int n = 1 << _bits;
 
 	_tCos = _cos.getTable();
@@ -61,6 +61,8 @@ void DCT::calc(float *data) {
 		break;
 	case DST_I:
 		calcDSTI(data);
+		break;
+	default:
 		break;
 	}
 }

@@ -1,0 +1,76 @@
+language:
+  - cpp
+
+sudo: required
+
+addons:
+  apt:
+    packages:
+    - g++ make
+    - libsdl2-dev
+    - libsdl2-net-dev
+    - libcurl4-openssl-dev
+    - libjpeg-turbo8-dev
+    - libmpeg2-4-dev
+    - libogg-dev
+    - libvorbis-dev
+    - libflac-dev
+    - libmad0-dev
+    - libpng-dev
+    - libtheora-dev
+    - libfaad-dev
+    - libfluidsynth-dev
+    - libfreetype6-dev
+    - zlib1g-dev
+    - libieee1284-3-dev
+    - libsndio-dev
+    - libunity-dev
+  homebrew:
+    packages:
+    - sdl2
+    - sdl2_net
+    - curl
+    - jpeg-turbo
+    - libmpeg2
+    - a52dec
+    - libogg
+    - libvorbis
+    - flac
+    - mad
+    - libpng
+    - theora
+    - faad2
+    - fluid-synth
+    - freetype
+    - zlib
+    - pandoc
+    - jack
+    update: true
+
+branches:
+ only:
+   - master
+
+matrix:
+  include:
+    - os: linux
+      compiler: gcc
+    - os: linux
+      compiler: clang
+    - os: osx
+      compiler: clang
+
+dist: trusty
+
+script:
+  - ./configure --enable-all-engines --enable-opl2lpt
+  - make -j 2
+  - make test
+  - make devtools
+
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#scummvm"
+    on_success: change
+    on_failure: always

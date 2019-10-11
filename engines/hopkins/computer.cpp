@@ -325,13 +325,13 @@ static const char _spanishText[] =
 "% **** ORDENADOR DEL FBI NUMERO 4985 **** ORDENADOR J.HOPKINS *****\n"
 "% **** ORDENADOR DEL FBI NUMERO 4998 **** ORDENADOR S.COLLINS *****\n"
 "% *** ORDENADOR DEL FBI NUMERO 4997 *** ORDENADOR DE ACCESO LIBRE ***\n"
-"% LA CONTRASE\0245A ES: ALLFREE\n"
-"% ESCRIBE CONTRASE\0245A ACTUAL\n"
+"% LA CONTRASE\xA5" "A ES: ALLFREE\n"
+"% ESCRIBE CONTRASE\xA5" "A ACTUAL\n"
 "% **** ACCESO DENEGADO ****\n"
 "% 1) *** JUEGO ***\n"
 "% 0) SALIR DEL ORDENADOR\n"
-"% 2) CADAVER EXTRA\0245O\n"
-"% 3) CADAVER EXTRA\0245O\n"
+"% 2) CADAVER EXTRA\xA5" "O\n"
+"% 3) CADAVER EXTRA\xA5" "O\n"
 "% 4) SENADOR FERGUSSON\n"
 "% 5) MATAPERROS\n"
 "% 2) CIENTIFICO SECUESTRADO.\n"
@@ -918,9 +918,9 @@ void ComputerManager::getScoreName() {
 	char score[16];
 	sprintf(score, "%d", _breakoutScore);
 	int scoreLen = 0;
-	do
+	do {
 		++scoreLen;
-	while (score[scoreLen]);
+	} while (score[scoreLen]);
 
 	for (int i = scoreLen - 1, scorePos = 8; i >= 0; i--) {
 		_score[scoreLine]._score.setChar(score[i], scorePos--);

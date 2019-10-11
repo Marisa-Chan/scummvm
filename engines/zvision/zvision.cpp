@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -29,19 +29,18 @@
 #include "zvision/graphics/cursors/cursor_manager.h"
 #include "zvision/file/save_manager.h"
 #include "zvision/text/string_manager.h"
-#include "zvision/detection.h"
 #include "zvision/scripting/menu.h"
 #include "zvision/file/search_manager.h"
 #include "zvision/text/text.h"
 #include "zvision/text/truetype_font.h"
 #include "zvision/sound/midi.h"
-#include "zvision/file/zfs_archive.h"
 
 #include "common/config-manager.h"
 #include "common/str.h"
 #include "common/debug.h"
 #include "common/debug-channels.h"
 #include "common/textconsole.h"
+#include "common/timer.h"
 #include "common/error.h"
 #include "common/system.h"
 #include "common/file.h"
@@ -137,9 +136,6 @@ void ZVision::registerDefaultSettings() {
 				ConfMan.registerDefault(settingsKeys[i].name, settingsKeys[i].defaultBoolValue);
 		}
 	}
-
-	ConfMan.registerDefault("originalsaveload", false);
-	ConfMan.registerDefault("doublefps", false);
 }
 
 void ZVision::loadSettings() {
@@ -184,16 +180,25 @@ void ZVision::initialize() {
 	_searchManager->addDir("FONTS");
 	_searchManager->addDir("addon");
 
-	if (_gameDescription->gameId == GID_GRANDINQUISITOR) {
+	if (getGameId() == GID_GRANDINQUISITOR) {
 		if (!_searchManager->loadZix("INQUIS.ZIX"))
 			error("Unable to load file INQUIS.ZIX");
-	} else if (_gameDescription->gameId == GID_NEMESIS) {
+	} else if (getGameId() == GID_NEMESIS) {
 		if (!_searchManager->loadZix("NEMESIS.ZIX")) {
 			// The game might not be installed, try MEDIUM.ZIX instead
 			if (!_searchManager->loadZix("ZNEMSCR/MEDIUM.ZIX"))
 				error("Unable to load the file ZNEMSCR/MEDIUM.ZIX");
 		}
 	}
+
+	Graphics::ModeList modes;
+	modes.push_back(Graphics::Mode(WINDOW_WIDTH, WINDOW_HEIGHT));
+#if defined(USE_MPEG2) && defined(USE_A52)
+	// For the DVD version of ZGI we can play high resolution videos
+	if (getGameId() == GID_GRANDINQUISITOR && (getFeatures() & GF_DVD))
+		modes.push_back(Graphics::Mode(HIRES_WINDOW_WIDTH, HIRES_WINDOW_HEIGHT));
+#endif
+	initGraphicsModes(modes);
 
 	initScreen();
 
@@ -209,7 +214,7 @@ void ZVision::initialize() {
 	_textRenderer = new TextRenderer(this);
 	_midiManager = new MidiManager();
 
-	if (_gameDescription->gameId == GID_GRANDINQUISITOR)
+	if (getGameId() == GID_GRANDINQUISITOR)
 		_menu = new MenuZGI(this);
 	else
 		_menu = new MenuNemesis(this);
@@ -217,14 +222,14 @@ void ZVision::initialize() {
 	// Initialize the managers
 	_cursorManager->initialize();
 	_scriptManager->initialize();
-	_stringManager->initialize(_gameDescription->gameId);
+	_stringManager->initialize(getGameId());
 
 	registerDefaultSettings();
 
 	loadSettings();
 
-#ifndef USE_MPEG2
-	// libmpeg2 not loaded, disable the MPEG2 movies option
+#if !defined(USE_MPEG2) || !defined(USE_A52)
+	// libmpeg2 or liba52 not loaded, disable the MPEG2 movies option
 	_scriptManager->setStateValue(StateKey_MPEGMovies, 2);
 #endif
 
@@ -280,7 +285,8 @@ Common::Error ZVision::run() {
 
 			if (!Common::File::exists(fontName) && !_searchManager->hasFile(fontName) &&
 				!Common::File::exists(liberationFontName) && !_searchManager->hasFile(liberationFontName) &&
-				!Common::File::exists(freeFontName) && !_searchManager->hasFile(freeFontName)) {
+				!Common::File::exists(freeFontName) && !_searchManager->hasFile(freeFontName) &&
+				!Common::File::exists("fonts.dat") && !_searchManager->hasFile("fonts.dat")) {
 				foundAllFonts = false;
 				break;
 			}
@@ -396,8 +402,8 @@ void ZVision::fpsTimer() {
 }
 
 void ZVision::initScreen() {
-	uint16 workingWindowWidth  = (_gameDescription->gameId == GID_NEMESIS) ? ZNM_WORKING_WINDOW_WIDTH  : ZGI_WORKING_WINDOW_WIDTH;
-	uint16 workingWindowHeight = (_gameDescription->gameId == GID_NEMESIS) ? ZNM_WORKING_WINDOW_HEIGHT : ZGI_WORKING_WINDOW_HEIGHT;
+	uint16 workingWindowWidth = (getGameId() == GID_NEMESIS) ? ZNM_WORKING_WINDOW_WIDTH : ZGI_WORKING_WINDOW_WIDTH;
+	uint16 workingWindowHeight = (getGameId() == GID_NEMESIS) ? ZNM_WORKING_WINDOW_HEIGHT : ZGI_WORKING_WINDOW_HEIGHT;
 	_workingWindow = Common::Rect(
 						 (WINDOW_WIDTH  -  workingWindowWidth) / 2,
 						 (WINDOW_HEIGHT - workingWindowHeight) / 2,
@@ -405,13 +411,13 @@ void ZVision::initScreen() {
 						((WINDOW_HEIGHT - workingWindowHeight) / 2) + workingWindowHeight
 					 );
 
-	initGraphics(WINDOW_WIDTH, WINDOW_HEIGHT, true, &_screenPixelFormat);
+	initGraphics(WINDOW_WIDTH, WINDOW_HEIGHT, &_screenPixelFormat);
 }
 
 void ZVision::initHiresScreen() {
 	_renderManager->upscaleRect(_workingWindow);
 
-	initGraphics(HIRES_WINDOW_WIDTH, HIRES_WINDOW_HEIGHT, true, &_screenPixelFormat);
+	initGraphics(HIRES_WINDOW_WIDTH, HIRES_WINDOW_HEIGHT, &_screenPixelFormat);
 }
 
 } // End of namespace ZVision

@@ -47,8 +47,9 @@ struct ADGameDescription;
 
 #define TOON_DAT_VER_MAJ 0  // 1 byte
 #define TOON_DAT_VER_MIN 3  // 1 byte
-#define TOON_SAVEGAME_VERSION 4
+#define TOON_SAVEGAME_VERSION 5
 #define DATAALIGNMENT 4
+#define MAX_SAVE_SLOT 99
 
 #define TOON_SCREEN_WIDTH 640
 #define TOON_SCREEN_HEIGHT 400
@@ -111,6 +112,7 @@ public:
 	Common::Error run();
 	GUI::Debugger *getDebugger() { return _console; }
 	bool showMainmenu(bool &loadedGame);
+	bool showOptions();
 	void init();
 	bool loadToonDat();
 	char **loadTextsVariants(Common::File &in);
@@ -122,6 +124,7 @@ public:
 	void parseInput();
 	void initChapter();
 	void initFonts();
+	void setFont(bool alternative);
 	void loadScene(int32 SceneId, bool forGameLoad = false);
 	void exitScene();
 	void loadCursor();
@@ -421,6 +424,7 @@ protected:
 	FontRenderer *_fontRenderer;
 	Animation *_fontToon;
 	Animation *_fontEZ;
+	Animation *_currentFont;
 
 	AudioManager *_audioManager;
 
@@ -431,6 +435,7 @@ protected:
 	bool _firstFrame;
 	bool _isDemo;
 	bool _showConversationText;
+	bool _useAlternativeFont;
 	bool _needPaletteFlush;
 private:
 	ToonConsole *_console;

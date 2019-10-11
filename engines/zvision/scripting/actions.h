@@ -26,12 +26,11 @@
 #include "common/str.h"
 #include "common/rect.h"
 
-#include "audio/mixer.h"
-
 namespace ZVision {
 
 // Forward declaration of ZVision. This file is included before ZVision is declared
 class ZVision;
+class ScriptManager;
 class ValueSlot;
 
 /**
@@ -40,7 +39,7 @@ class ValueSlot;
   */
 class ResultAction {
 public:
-	ResultAction(ZVision *engine, int32 slotkey) : _engine(engine), _slotKey(slotkey) {}
+	ResultAction(ZVision *engine, int32 slotkey);
 	virtual ~ResultAction() {}
 	/**
 	 * This is called by the script system whenever a Puzzle's criteria are found to be true.
@@ -53,6 +52,7 @@ public:
 	virtual bool execute() = 0;
 protected:
 	ZVision *_engine;
+	ScriptManager *_scriptManager;
 	int32 _slotKey;
 };
 
@@ -267,7 +267,6 @@ public:
 	bool execute();
 
 private:
-	uint32 _animationKey;
 	uint32 _controlKey;
 	uint32 _x1;
 	uint32 _y1;

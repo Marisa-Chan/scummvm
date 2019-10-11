@@ -231,4 +231,10 @@ Common::SeekableReadStream *SymbianFilesystemNode::createReadStream() {
 Common::WriteStream *SymbianFilesystemNode::createWriteStream() {
 	return SymbianStdioStream::makeFromPath(getPath(), true);
 }
+
+bool SymbianFilesystemNode::createDirectory() {
+	warning("SymbianFilesystemNode::createDirectory(): Not supported");
+	return _isValid && _isDirectory;
+}
+
 #endif //#if defined(__SYMBIAN32__)

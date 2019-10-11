@@ -25,6 +25,7 @@
 
 #include "agos/agos.h"
 #include "agos/intern.h"
+#include "agos/sound.h"
 #include "agos/vga.h"
 
 #include "common/debug-channels.h"
@@ -1082,7 +1083,7 @@ void AGOSEngine::vc27_resetSprite() {
 
 	_lastVgaWaitFor = 0;
 
-	memset(&bak, 0, sizeof(bak));
+	bak.reset();
 
 	vsp = _vgaSprites;
 	while (vsp->id) {

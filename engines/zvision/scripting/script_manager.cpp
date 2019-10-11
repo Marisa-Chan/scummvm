@@ -1,24 +1,24 @@
 /* ScummVM - Graphic Adventure Engine
-*
-* ScummVM is the legal property of its developers, whose names
-* are too numerous to list here. Please refer to the COPYRIGHT
-* file distributed with this source distribution.
-*
-* This program is free software; you can redistribute it and/or
-* modify it under the terms of the GNU General Public License
-* as published by the Free Software Foundation; either version 2
-* of the License, or (at your option) any later version.
-
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-*
-*/
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ */
 
 #include "common/scummsys.h"
 
@@ -72,8 +72,7 @@ void ScriptManager::initialize() {
 }
 
 void ScriptManager::update(uint deltaTimeMillis) {
-	if (_currentLocation.node != _nextLocation.node || _currentLocation.room != _nextLocation.room ||
-	        _currentLocation.view != _nextLocation.view || _currentLocation.world != _nextLocation.world) {
+	if (_currentLocation != _nextLocation) {
 		ChangeLocationReal(false);
 	}
 
@@ -543,7 +542,7 @@ void ScriptManager::changeLocation(char _world, char _room, char _node, char _vi
 	_nextLocation.view = _view;
 	_nextLocation.offset = offset;
 	// If next location is 0000, return to the previous location.
-	if (_nextLocation.world == '0' && _nextLocation.room == '0' && _nextLocation.node == '0' && _nextLocation.view == '0') {
+	if (_nextLocation == "0000") {
 		if (getStateValue(StateKey_World) != 'g' || getStateValue(StateKey_Room) != 'j') {
 			_nextLocation.world = getStateValue(StateKey_LastWorld);
 			_nextLocation.room = getStateValue(StateKey_LastRoom);
@@ -580,7 +579,7 @@ void ScriptManager::ChangeLocationReal(bool isLoading) {
 				_nextLocation.node = _currentLocation.node;
 				_nextLocation.view = _currentLocation.view;
 				_nextLocation.offset = _currentLocation.offset;
-				
+
 				return;
 			} else {
 				_currentLocation.world = 'g';
@@ -680,7 +679,7 @@ void ScriptManager::ChangeLocationReal(bool isLoading) {
 	// Change the background position
 	_engine->getRenderManager()->setBackgroundPosition(_nextLocation.offset);
 
-	if (_currentLocation.world == 0 && _currentLocation.room == 0 && _currentLocation.node == 0 && _currentLocation.view == 0) {
+	if (_currentLocation == "0000") {
 		_currentLocation = _nextLocation;
 		execScope(world);
 		execScope(room);

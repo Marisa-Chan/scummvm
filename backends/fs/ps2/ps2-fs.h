@@ -96,6 +96,7 @@ public:
 
 	virtual Common::SeekableReadStream *createReadStream();
 	virtual Common::WriteStream *createWriteStream();
+	virtual bool createDirectory();
 
 	int getDev() { return 0; }
 };

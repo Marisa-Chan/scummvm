@@ -32,8 +32,8 @@
 #include "common/rect.h"
 #include "common/stack.h"
 #include "common/util.h"
+#include "audio/mixer.h"
 
-#include "agos/sound.h"
 #include "agos/vga.h"
 
 /**
@@ -77,10 +77,14 @@ uint fileReadItemID(Common::SeekableReadStream *in);
 class MoviePlayer;
 #endif
 
+class Sound;
 class MidiPlayer;
 
 struct Child;
 struct SubObject;
+struct RoomState;
+struct SubRoom;
+struct SubSuperRoom;
 
 struct Item;
 struct WindowBlock;
@@ -128,7 +132,18 @@ struct VgaSprite {
 	uint16 priority;
 	uint16 windowNum;
 	uint16 zoneNum;
-	VgaSprite() { memset(this, 0, sizeof(*this)); }
+	VgaSprite() { reset(); }
+
+	void reset() {
+		id = 0;
+		image = 0;
+		palette = 0;
+		x = y = 0;
+		flags = 0;
+		priority = 0;
+		windowNum = 0;
+		zoneNum = 0;
+	}
 };
 
 struct VgaSleepStruct {

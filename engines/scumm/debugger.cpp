@@ -145,8 +145,8 @@ bool ScummDebugger::Cmd_IMuse(int argc, const char **argv) {
 					debugPrintf("Selecting from %d songs...\n", _vm->_numSounds);
 					sound = _vm->_rnd.getRandomNumber(_vm->_numSounds);
 				}
-				_vm->ensureResourceLoaded(rtSound, sound);
-				_vm->_musicEngine->startSound(sound);
+				if (_vm->getResourceAddress(rtSound, sound))
+					_vm->_musicEngine->startSound(sound);
 
 				debugPrintf("Attempted to start music %d.\n", sound);
 			} else {
@@ -256,7 +256,7 @@ bool ScummDebugger::Cmd_Hide(int argc, const char **argv) {
 bool ScummDebugger::Cmd_Script(int argc, const char** argv) {
 	int scriptnum;
 
-	if (argc < 2) {
+	if (argc < 3) {
 		debugPrintf("Syntax: script <scriptnum> <command>\n");
 		return true;
 	}
@@ -303,12 +303,15 @@ bool ScummDebugger::Cmd_ImportRes(int argc, const char** argv) {
 		if (_vm->_game.features & GF_SMALL_HEADER) {
 			size = file.readUint16LE();
 			file.seek(-2, SEEK_CUR);
-		} else if (_vm->_game.features & GF_SMALL_HEADER) { // FIXME: This never was executed
+#if 0
+		// FIXME: This never was executed due to duplicated if condition
+		} else if (_vm->_game.features & GF_SMALL_HEADER) {
 			if (_vm->_game.version == 4)
 				file.seek(8, SEEK_CUR);
 			size = file.readUint32LE();
 			file.readUint16LE();
 			file.seek(-6, SEEK_CUR);
+#endif
 		} else {
 			file.readUint32BE();
 			size = file.readUint32BE();
@@ -411,14 +414,15 @@ bool ScummDebugger::Cmd_PrintActor(int argc, const char **argv) {
 	int i;
 	Actor *a;
 
-	debugPrintf("+---------------------------------------------------------------+\n");
-	debugPrintf("|# |  x |  y | w | h |elev|cos|box|mov| zp|frm|scl|dir|   cls   |\n");
-	debugPrintf("+--+----+----+---+---+----+---+---+---+---+---+---+---+---------+\n");
+	debugPrintf("+----------------------------------------------------------------------------+\n");
+	debugPrintf("|# |    name    |  x |  y | w | h |elev|cos|box|mov| zp|frm|scl|dir|   cls   |\n");
+	debugPrintf("+--+------------+----+----+---+---+----+---+---+---+---+---+---+---+---------+\n");
 	for (i = 1; i < _vm->_numActors; i++) {
 		a = _vm->_actors[i];
+		const byte *name = _vm->getObjOrActorName(_vm->actorToObj(a->_number));
 		if (a->_visible)
-			debugPrintf("|%2d|%4d|%4d|%3d|%3d|%4d|%3d|%3d|%3d|%3d|%3d|%3d|%3d|$%08x|\n",
-						 a->_number, a->getRealPos().x, a->getRealPos().y, a->_width,  a->_bottom - a->_top,
+			debugPrintf("|%2d|%-12.12s|%4d|%4d|%3d|%3d|%4d|%3d|%3d|%3d|%3d|%3d|%3d|%3d|$%08x|\n",
+						 a->_number, name, a->getRealPos().x, a->getRealPos().y, a->_width,  a->_bottom - a->_top,
 						 a->getElevation(),
 						 a->_costume, a->_walkbox, a->_moving, a->_forceClip, a->_frame,
 						 a->_scalex, a->getFacing(), _vm->_classData[a->_number]);
@@ -431,17 +435,18 @@ bool ScummDebugger::Cmd_PrintObjects(int argc, const char **argv) {
 	int i;
 	ObjectData *o;
 	debugPrintf("Objects in current room\n");
-	debugPrintf("+---------------------------------+------------+\n");
-	debugPrintf("|num |  x |  y |width|height|state|fl|   cls   |\n");
-	debugPrintf("+----+----+----+-----+------+-----+--+---------+\n");
+	debugPrintf("+-----------------------------------------------------------+\n");
+	debugPrintf("|num |    name    |  x |  y |width|height|state|fl|   cls   |\n");
+	debugPrintf("+----+------------+----+----+-----+------+-----+--+---------+\n");
 
 	for (i = 1; i < _vm->_numLocalObjects; i++) {
 		o = &(_vm->_objs[i]);
 		if (o->obj_nr == 0)
 			continue;
 		int classData = (_vm->_game.version != 0 ? _vm->_classData[o->obj_nr] : 0);
-		debugPrintf("|%4d|%4d|%4d|%5d|%6d|%5d|%2d|$%08x|\n",
-				o->obj_nr, o->x_pos, o->y_pos, o->width, o->height, o->state,
+		const byte *name = _vm->getObjOrActorName(o->obj_nr);
+		debugPrintf("|%4d|%-12.12s|%4d|%4d|%5d|%6d|%5d|%2d|$%08x|\n",
+				o->obj_nr, name, o->x_pos, o->y_pos, o->width, o->height, o->state,
 				o->fl_object_index, classData);
 	}
 	debugPrintf("\n");

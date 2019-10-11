@@ -40,36 +40,22 @@
 
 namespace Made {
 
-struct GameSettings {
-	const char *gameid;
-	const char *description;
-	byte id;
-	uint32 features;
-	const char *detectname;
-};
-
-static const GameSettings madeSettings[] = {
-	{"made", "Made game", 0, 0, 0},
-
-	{NULL, NULL, 0, 0, NULL}
-};
-
 MadeEngine::MadeEngine(OSystem *syst, const MadeGameDescription *gameDesc) : Engine(syst), _gameDescription(gameDesc) {
 
-	const GameSettings *g;
-
-	const char *gameid = ConfMan.get("gameid").c_str();
-	for (g = madeSettings; g->gameid; ++g)
-		if (!scumm_stricmp(g->gameid, gameid))
-			_gameId = g->id;
+	_eventNum = 0;
+	_eventMouseX = _eventMouseY = 0;
+	_eventKey = 0;
+	_autoStopSound = false;
+	_soundEnergyIndex = 0;
+	_soundEnergyArray = 0;
+	_musicBeatStart = 0;
+	_cdTimeStart = 0;
 
 	_rnd = new Common::RandomSource("made");
 
 	_console = new MadeConsole(this);
 
-	int cd_num = ConfMan.getInt("cdrom");
-	if (cd_num >= 0)
-		_system->getAudioCDManager()->openCD(cd_num);
+	_system->getAudioCDManager()->open();
 
 	_pmvPlayer = new PmvPlayer(this, _mixer);
 	_res = new ResourceReader();
@@ -86,6 +72,8 @@ MadeEngine::MadeEngine(OSystem *syst, const MadeGameDescription *gameDesc) : Eng
 	_script = new ScriptInterpreter(this);
 
 	_music = nullptr;
+
+	_soundRate = 0;
 
 	// Set default sound frequency
 	switch (getGameID()) {
@@ -270,16 +258,16 @@ void MadeEngine::handleEvents() {
 		}
 	}
 
-	_system->getAudioCDManager()->updateCD();
+	_system->getAudioCDManager()->update();
 
 }
 
 Common::Error MadeEngine::run() {
-	_music = new MusicPlayer();
+	_music = new MusicPlayer(getGameID() == GID_RTZ);
 	syncSoundSettings();
 
 	// Initialize backend
-	initGraphics(320, 200, false);
+	initGraphics(320, 200);
 
 	resetAllTimers();
 

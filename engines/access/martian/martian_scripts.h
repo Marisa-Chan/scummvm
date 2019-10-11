@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -35,9 +35,18 @@ class MartianEngine;
 class MartianScripts : public Scripts {
 private:
 	MartianEngine *_game;
+
+	void cmdSpecial0();
+	void cmdSpecial1(int param1);
+	void cmdSpecial3();
+	void doIntro(int param1);
+	void cmdSpecial6();
+	void cmdSpecial7();
+
 protected:
 	virtual void executeSpecial(int commandIndex, int param1, int param2);
 	virtual void executeCommand(int commandIndex);
+
 public:
 	MartianScripts(AccessEngine *vm);
 };

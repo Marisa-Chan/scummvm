@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -111,7 +111,7 @@ MusicNode::~MusicNode() {
 		_engine->getScriptManager()->setStateValue(_key, 2);
 	if (_sub)
 		delete _sub;
-	debug(1, "MusicNode: %d destroyed\n", _key);
+	debug(1, "MusicNode: %d destroyed", _key);
 }
 
 void MusicNode::setDeltaVolume(uint8 volume) {
@@ -140,7 +140,7 @@ bool MusicNode::process(uint32 deltaTimeInMillis) {
 			if (_crossfadeTime > 0) {
 				if ((int32)deltaTimeInMillis > _crossfadeTime)
 					deltaTimeInMillis = _crossfadeTime;
-				_newvol += floor(((float)(_crossfadeTarget - _newvol) / (float)_crossfadeTime)) * (float)deltaTimeInMillis;
+				_newvol += (int)(floor(((float)(_crossfadeTarget - _newvol) / (float)_crossfadeTime)) * (float)deltaTimeInMillis);
 				_crossfadeTime -= deltaTimeInMillis;
 			} else {
 				_crossfade = false;
@@ -227,8 +227,7 @@ bool PanTrackNode::process(uint32 deltaTimeInMillis) {
 		int volumeCorrection = 2;
 
 		if (_engine->getGameId() == GID_GRANDINQUISITOR) {
-			Location loc = scriptManager->getCurrentLocation();
-			if (loc.world == 'd' && loc.room == 'c' && loc.node == '1' && loc.view == '0')
+			if (scriptManager->getCurrentLocation() == "dc10")
 				volumeCorrection = 5;
 		}
 

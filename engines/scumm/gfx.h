@@ -53,12 +53,24 @@ struct CameraData {
 	int _leftTrigger, _rightTrigger;
 	byte _follows, _mode;
 	bool _movingToActor;
+
+	void reset() {
+		_cur.x = _cur.y = 0;
+		_dest.x = _dest.y = 0;
+		_accel.x = _accel.y = 0;
+		_last.x = _last.y = 0;
+		_leftTrigger = 0;
+		_rightTrigger = 0;
+		_follows = 0;
+		_mode = 0;
+		_movingToActor = 0;
+	}
 };
 
 /** Virtual screen identifiers */
 enum VirtScreenNumber {
 	kMainVirtScreen = 0,	// The 'stage'
-	kTextVirtScreen = 1,	// In V1-V3 games: the area where text is printed
+	kTextVirtScreen = 1,	// In V0-V3 games: the area where text is printed
 	kVerbVirtScreen = 2,	// The verb area
 	kUnkVirtScreen = 3		// ?? Not sure what this one is good for...
 };

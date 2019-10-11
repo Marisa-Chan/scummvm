@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -123,6 +123,8 @@ bool SafeControl::process(uint32 deltaTimeInMillis) {
 			_animation->seekToFrame(_animation->getCurFrame() - 1);
 
 		const Graphics::Surface *frameData = _animation->decodeNextFrame();
+		if (_animation->getCurFrame() == _targetFrame)
+			_engine->getScriptManager()->setStateValue(_key, _curState);
 		if (frameData)
 			_engine->getRenderManager()->blitSurfaceToBkg(*frameData, _rectangle.left, _rectangle.top);
 	}
@@ -155,7 +157,7 @@ bool SafeControl::onMouseUp(const Common::Point &screenSpacePos, const Common::P
 
 			Common::Point tmp = backgroundImageSpacePos - _center;
 
-			float dd = atan2((float)tmp.x, (float)tmp.y) * 57.29578;
+			float dd = atan2((float)tmp.y, (float)tmp.x) * 57.29578;
 
 			int16 dp_state = 360 / _statesCount;
 
@@ -169,8 +171,6 @@ bool SafeControl::onMouseUp(const Common::Point &screenSpacePos, const Common::P
 			_curState = (_statesCount * 2 + tmp2) % _statesCount;
 
 			_targetFrame = (_curState + _statesCount - _startPointer) % _statesCount;
-
-			_engine->getScriptManager()->setStateValue(_key, _curState);
 			return true;
 		}
 	}

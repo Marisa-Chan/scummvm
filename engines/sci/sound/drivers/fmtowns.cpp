@@ -101,7 +101,7 @@ public:
 	~MidiDriver_FMTowns();
 
 	int open();
-	void loadInstruments(const uint8 *data);
+	void loadInstruments(const SciSpan<const uint8> &data);
 	bool isOpen() const { return _isOpen; }
 	void close();
 
@@ -115,8 +115,6 @@ public:
 	uint32 getBaseTempo();
 	MidiChannel *allocateChannel() { return 0; }
 	MidiChannel *getPercussionChannel() { return 0; }
-
-	uint8 currentProgram();
 
 	void timerCallback(int timerId);
 
@@ -329,6 +327,8 @@ void TownsMidiPart::addChannels(int num) {
 
 	_chanMissing += num;
 	programChange(_program);
+	pitchBend(_pitchBend);
+	controlChangeVolume(_volume << 1);
 }
 
 void TownsMidiPart::dropChannels(int num) {
@@ -405,7 +405,7 @@ int TownsMidiPart::allocateChannel() {
 }
 
 MidiDriver_FMTowns::MidiDriver_FMTowns(Audio::Mixer *mixer, SciVersion version) : _version(version), _timerProc(0), _timerProcPara(0), _baseTempo(10080), _ready(false), _isOpen(false), _masterVolume(0x0f), _soundOn(true) {
-	_intf = new TownsAudioInterface(mixer, this, true);
+	_intf = new TownsAudioInterface(mixer, this);
 	_out = new TownsChannel*[6];
 	for (int i = 0; i < 6; i++)
 		_out[i] = new TownsChannel(this, i);
@@ -461,14 +461,18 @@ int MidiDriver_FMTowns::open() {
 	return 0;
 }
 
-void MidiDriver_FMTowns::loadInstruments(const uint8 *data) {
-	if (data) {
-		data += 6;
-		for (int i = 0; i < 128; i++) {
-			_intf->callback(5, 0, i, data);
-			data += 48;
+void MidiDriver_FMTowns::loadInstruments(const SciSpan<const uint8> &data) {
+	enum {
+		fmDataSize = 48
+	};
+
+	if (data.size()) {
+		SciSpan<const uint8> instrumentData = data.subspan(6);
+		for (int i = 0; i < 128; i++, instrumentData += fmDataSize) {
+			_intf->callback(5, 0, i, instrumentData.getUnsafeDataAt(0, fmDataSize));
 		}
 	}
+
 	_intf->callback(70, 3);
 	property(MIDI_PROP_MASTER_VOLUME, _masterVolume);
 }
@@ -622,7 +626,7 @@ int MidiPlayer_FMTowns::open(ResourceManager *resMan) {
 	if (_townsDriver) {
 		result = _townsDriver->open();
 		if (!result && _version == SCI_VERSION_1_LATE)
-			_townsDriver->loadInstruments((resMan->findResource(ResourceId(kResourceTypePatch, 8), true))->data);
+			_townsDriver->loadInstruments(*resMan->findResource(ResourceId(kResourceTypePatch, 8), false));
 	}
 	return result;
 }
@@ -636,7 +640,12 @@ byte MidiPlayer_FMTowns::getPlayId() const {
 }
 
 int MidiPlayer_FMTowns::getPolyphony() const {
-	return (_version == SCI_VERSION_1_EARLY) ? 1 : 6;
+	// WORKAROUND:
+	// I set the return value to 16 for SCI_VERSION_1_EARLY here, which fixes music playback in Mixed Up Mothergoose.
+	// This has been broken since the introduction of SciMusic::remapChannels() and the corresponding code.
+	// The original code of Mixed Up Mothergoose code doesn't have the remapping and doesn't seem to check the polyphony
+	// setting ever. So the value of 1 was probably incorrect.
+	return (_version == SCI_VERSION_1_EARLY) ? 16 : 6;
 }
 
 void MidiPlayer_FMTowns::playSwitch(bool play) {

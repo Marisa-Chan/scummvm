@@ -8,12 +8,12 @@
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
-
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
-
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
@@ -23,16 +23,14 @@
 #ifndef VIDEO_MPEGPS_DECODER_H
 #define VIDEO_MPEGPS_DECODER_H
 
+#include "common/inttypes.h"
 #include "common/hashmap.h"
+#include "common/queue.h"
 #include "graphics/surface.h"
 #include "video/video_decoder.h"
 
-#ifdef USE_MAD
-#include <mad.h>
-#endif
-
 namespace Audio {
-class QueuingAudioStream;
+class PacketizedAudioStream;
 }
 
 namespace Common {
@@ -56,7 +54,7 @@ namespace Video {
  */
 class MPEGPSDecoder : public VideoDecoder {
 public:
-	MPEGPSDecoder();
+	MPEGPSDecoder(double decibel = 0.0);
 	virtual ~MPEGPSDecoder();
 
 	bool loadStream(Common::SeekableReadStream *stream);
@@ -67,6 +65,39 @@ protected:
 	bool useAudioSync() const { return false; }
 
 private:
+	class MPEGPSDemuxer {
+	public:
+		MPEGPSDemuxer();
+		~MPEGPSDemuxer();
+
+		bool loadStream(Common::SeekableReadStream *stream);
+		void close();
+
+		Common::SeekableReadStream *getFirstVideoPacket(int32 &startCode, uint32 &pts, uint32 &dts);
+		Common::SeekableReadStream *getNextPacket(uint32 currentTime, int32 &startCode, uint32 &pts, uint32 &dts);
+
+	private:
+		class Packet {
+		public:
+			Packet(Common::SeekableReadStream *stream, int32 startCode, uint32 pts, uint32 dts) : _stream(stream), _startCode(startCode), _pts(pts), _dts(dts) {}
+
+			Common::SeekableReadStream *_stream;
+			int32 _startCode;
+			uint32 _pts;
+			uint32 _dts;
+		};
+		bool queueNextPacket();
+		bool fillQueues();
+		int readNextPacketHeader(int32 &startCode, uint32 &pts, uint32 &dts);
+		int findNextStartCode(uint32 &size);
+		uint32 readPTS(int c);
+		void parseProgramStreamMap(int length);
+
+		Common::SeekableReadStream *_stream;
+		Common::Queue<Packet> _videoQueue;
+		Common::Queue<Packet> _audioQueue;
+	};
+
 	// Base class for handling MPEG streams
 	class MPEGStream {
 	public:
@@ -77,7 +108,7 @@ private:
 			kStreamTypeAudio
 		};
 
-		virtual bool sendPacket(Common::SeekableReadStream *firstPacket, uint32 pts, uint32 dts) = 0;
+		virtual bool sendPacket(Common::SeekableReadStream *packet, uint32 pts, uint32 dts) = 0;
 		virtual StreamType getStreamType() const = 0;
 	};
 
@@ -103,6 +134,7 @@ private:
 	private:
 		bool _endOfTrack;
 		int _curFrame;
+		uint32 _framePts;
 		Audio::Timestamp _nextFrameStartTime;
 		Graphics::Surface *_surface;
 
@@ -115,10 +147,9 @@ private:
 
 #ifdef USE_MAD
 	// An MPEG audio track
-	// TODO: Merge this with the normal MP3Stream somehow
 	class MPEGAudioTrack : public AudioTrack, public MPEGStream {
 	public:
-		MPEGAudioTrack(Common::SeekableReadStream *firstPacket);
+		MPEGAudioTrack(Common::SeekableReadStream &firstPacket, Audio::Mixer::SoundType soundType);
 		~MPEGAudioTrack();
 
 		bool sendPacket(Common::SeekableReadStream *packet, uint32 pts, uint32 dts);
@@ -128,32 +159,24 @@ private:
 		Audio::AudioStream *getAudioStream() const;
 
 	private:
-		Audio::QueuingAudioStream *_audStream;
+		Audio::PacketizedAudioStream *_audStream;
+	};
+#endif
 
-		enum State {
-			MP3_STATE_INIT,  // Need to init the decoder
-			MP3_STATE_READY, // ready for processing data
-			MP3_STATE_EOS    // end of data reached (may need to loop)
-		};
+#ifdef USE_A52
+	class AC3AudioTrack : public AudioTrack, public MPEGStream {
+	public:
+		AC3AudioTrack(Common::SeekableReadStream &firstPacket, double decibel, Audio::Mixer::SoundType soundType);
+		~AC3AudioTrack();
 
-		State _state;
+		bool sendPacket(Common::SeekableReadStream *packet, uint32 pts, uint32 dts);
+		StreamType getStreamType() const { return kStreamTypeAudio; }
 
-		mad_stream _stream;
-		mad_frame _frame;
-		mad_synth _synth;
+	protected:
+		Audio::AudioStream *getAudioStream() const;
 
-		enum {
-			BUFFER_SIZE = 5 * 8192
-		};
-
-		// This buffer contains a slab of input data
-		byte _buf[BUFFER_SIZE + MAD_BUFFER_GUARD];
-
-		void initStream(Common::SeekableReadStream *packet);
-		void deinitStream();
-		void readMP3Data(Common::SeekableReadStream *packet);
-		void readHeader(Common::SeekableReadStream *packet);
-		void decodeMP3Data(Common::SeekableReadStream *packet);
+	private:
+		Audio::PacketizedAudioStream *_audStream;
 	};
 #endif
 
@@ -169,19 +192,15 @@ private:
 	PrivateStreamType detectPrivateStreamType(Common::SeekableReadStream *packet);
 
 	bool addFirstVideoTrack();
+	MPEGStream *getStream(uint32 startCode, Common::SeekableReadStream *packet);
 
-	int readNextPacketHeader(int32 &startCode, uint32 &pts, uint32 &dts);
-	int findNextStartCode(uint32 &size);
-	uint32 readPTS(int c);
-
-	void parseProgramStreamMap(int length);
-	byte _psmESType[256];
+	MPEGPSDemuxer *_demuxer;
 
 	// A map from stream types to stream handlers
 	typedef Common::HashMap<int, MPEGStream *> StreamMap;
 	StreamMap _streamMap;
 
-	Common::SeekableReadStream *_stream;
+	double _decibel;
 };
 
 } // End of namespace Video

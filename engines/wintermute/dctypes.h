@@ -37,9 +37,6 @@
 
 namespace Wintermute {
 
-//typedef std::string AnsiString;
-//typedef std::string Utf8String;
-//typedef std::wstring WideString;
 typedef Common::String AnsiString;
 typedef Common::String Utf8String;
 typedef Common::U32String WideString;
@@ -192,6 +189,28 @@ enum TSFXType {
 enum TSpriteCacheType {
 	CACHE_ALL,
 	CACHE_HALF
+};
+
+enum TTextCharset {
+	CHARSET_ANSI = 0,
+	CHARSET_DEFAULT = 1,
+	CHARSET_OEM = 2,
+	CHARSET_BALTIC = 3,
+	CHARSET_CHINESEBIG5 = 4,
+	CHARSET_EASTEUROPE = 5,
+	CHARSET_GB2312 = 6, 
+	CHARSET_GREEK = 7,
+	CHARSET_HANGUL = 8, 
+	CHARSET_MAC = 9,
+	CHARSET_RUSSIAN = 10,
+	CHARSET_SHIFTJIS = 11,
+	CHARSET_SYMBOL = 12,
+	CHARSET_TURKISH = 13,
+	CHARSET_VIETNAMESE = 14,
+	CHARSET_JOHAB = 15,
+	CHARSET_ARABIC = 16,
+	CHARSET_HEBREW = 17,
+	CHARSET_THAI = 18
 };
 
 enum TTextEncoding {

@@ -28,6 +28,8 @@
 #include "common/hashmap.h"
 #include "common/hash-str.h"
 #include "common/array.h"
+#include "common/str.h"
+#include "common/str-array.h"
 
 namespace GUI {
 
@@ -40,7 +42,11 @@ public:
 	Debugger();
 	virtual ~Debugger();
 
+	int getCharsPerLine();
+
 	int debugPrintf(const char *format, ...) GCC_PRINTF(2, 3);
+
+	void debugPrintColumns(const Common::StringArray &list);
 
 	/**
 	 * The onFrame() method should be invoked by the engine at regular
@@ -156,7 +162,7 @@ private:
 	 */
 	bool _isActive;
 
-	char *_errStr;
+	Common::String _errStr;
 
 	/**
 	 * Initially true, set to false when Debugger::enter is called
@@ -198,6 +204,12 @@ protected:
 
 private:
 	void enter();
+
+	/**
+	 * Splits up the input into individual parameters
+	 * @remarks		Adapted from code provided by torek on StackOverflow
+	 */
+	void splitCommand(Common::String &input, int &argc, const char **argv);
 
 	bool parseCommand(const char *input);
 	bool tabComplete(const char *input, Common::String &completion) const;
